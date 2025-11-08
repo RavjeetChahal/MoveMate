@@ -27,6 +27,7 @@ const LoginScreen = ({ navigation }) => {
   const { setRole } = useAuth();
 
   const handleSelectRole = (roleKey) => {
+    console.log('[Login] Role selected', roleKey);
     setRole(roleKey);
   };
 

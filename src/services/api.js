@@ -39,6 +39,7 @@ export const transcribeAudio = async ({ uri, file, mimeType = 'audio/m4a', onUpl
     });
   }
 
+  console.log('[API] Base URL resolved to', API_BASE_URL);
   console.log(
     '[API] Uploading audio for transcription',
     file

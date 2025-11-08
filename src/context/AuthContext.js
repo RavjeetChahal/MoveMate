@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 const AuthContext = createContext({
   role: null,
@@ -9,15 +9,24 @@ const AuthContext = createContext({
 export const AuthProvider = ({ children }) => {
   const [role, setRole] = useState(null);
 
+  useEffect(() => {
+    console.log('[Auth] role state changed →', role);
+  }, [role]);
+
+  const wrappedSetRole = useCallback((value) => {
+    console.log('[Auth] setRole called with', value);
+    setRole(value);
+  }, []);
+
   const resetRole = () => setRole(null);
 
   const value = useMemo(
     () => ({
       role,
-      setRole,
+      setRole: wrappedSetRole,
       resetRole,
     }),
-    [role],
+    [role, wrappedSetRole],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

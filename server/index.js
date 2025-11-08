@@ -15,6 +15,7 @@ if (!process.env.CORS_ALLOW_ORIGINS) {
   console.warn('[server] CORS_ALLOW_ORIGINS not provided. Defaulting to http://localhost:8081');
 }
 
+const host = process.env.HOST || '0.0.0.0';
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -25,7 +26,16 @@ const allowedOrigins = (process.env.CORS_ALLOW_ORIGINS || 'http://localhost:8081
 
 app.use(
   cors({
-    origin: allowedOrigins.includes('*') ? '*' : allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true);
+      }
+      if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      console.warn('[server] Blocked CORS origin', origin);
+      return callback(new Error('Not allowed by CORS'));
+    },
     methods: ['POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type'],
   }),
@@ -243,7 +253,7 @@ app.get('/', (req, res) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`MoveMate server listening on http://localhost:${port}`);
+app.listen(port, host, () => {
+  console.log(`MoveMate server listening on http://${host}:${port}`);
 });
 
