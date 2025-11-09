@@ -67,7 +67,7 @@ const LoginScreen = ({ navigation }) => {
     hasNavigatedRef.current = true;
     setLoading(false);
     navigation.replace(targetScreen);
-  }, [role, navigation]);
+  }, [role, navigation, hasNavigatedRef]);
 
   const handleLogin = async () => {
     console.log("[LoginScreen] handleLogin called", {
@@ -129,14 +129,12 @@ const LoginScreen = ({ navigation }) => {
       hasNavigated: hasNavigatedRef.current,
     });
 
-    if (user && role) {
-      if (!hasNavigatedRef.current) {
-        navigateToTarget();
-      } else {
-        console.log(
-          "[LoginScreen] Navigation already performed for this session"
-        );
-      }
+    if (user && role && !hasNavigatedRef.current) {
+      const targetScreen = role === "resident" ? "Home" : "Dashboard";
+      console.log(`[LoginScreen] Auto-navigating to ${targetScreen}`);
+      hasNavigatedRef.current = true;
+      setLoading(false);
+      navigation.replace(targetScreen);
     } else if (!user) {
       if (hasNavigatedRef.current) {
         console.log(
@@ -146,7 +144,7 @@ const LoginScreen = ({ navigation }) => {
       hasNavigatedRef.current = false;
       setLoading(false);
     }
-  }, [user, role, navigateToTarget]);
+  }, [user, role, navigation]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
