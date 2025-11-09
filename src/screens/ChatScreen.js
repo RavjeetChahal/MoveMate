@@ -14,7 +14,7 @@ import { CommonActions } from "@react-navigation/native";
 import { useConversation } from "../context/ConversationContext";
 import { useAuth } from "../context/AuthContext";
 import { Audio } from "expo-av";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { transcribeAudio } from "../services/api";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, gradients, shadows } from "../theme/colors";
@@ -264,12 +264,10 @@ const ChatScreen = ({ navigation }) => {
       log("Configuring Audio mode for native recording…");
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
         playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-        playThroughEarpieceAndroid: false,
         staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
       });
       log("Preparing recorder…");
       const recording = new Audio.Recording();
@@ -408,26 +406,52 @@ const ChatScreen = ({ navigation }) => {
               };
             } else {
               log("Playing TTS audio on native");
+              
+              // Set audio mode for playback
+              try {
+                await Audio.setAudioModeAsync({
+                  allowsRecordingIOS: false,
+                  playsInSilentModeIOS: true,
+                  staysActiveInBackground: false,
+                });
+                log("Audio mode set for TTS playback");
+              } catch (modeErr) {
+                log("Failed to set audio mode for playback:", modeErr);
+              }
+              
               const filename = `resi-reply-${Date.now()}.mp3`;
               const fileUri = FileSystem.cacheDirectory + filename;
               await FileSystem.writeAsStringAsync(fileUri, base64, {
                 encoding: FileSystem.EncodingType.Base64,
               });
+              log("TTS audio written to file:", fileUri);
+              
               const { sound } = await Audio.Sound.createAsync(
                 { uri: fileUri },
-                { shouldPlay: true }
-              );
-              sound.setOnPlaybackStatusUpdate(async (status) => {
-                if (status?.didJustFinish) {
-                  try {
-                    await sound.unloadAsync();
-                  } catch (e) {}
-                  try {
-                    await FileSystem.deleteAsync(fileUri, { idempotent: true });
-                  } catch (e) {}
-                  setSpeakingMessageId(null);
+                { shouldPlay: true },
+                (status) => {
+                  log("TTS playback status:", status);
+                  if (status.didJustFinish) {
+                    log("TTS playback finished");
+                    sound.unloadAsync().catch((e) => log("Failed to unload:", e));
+                    // Clean up the temp audio file
+                    try {
+                      const file = FileSystem.getInfoAsync(fileUri);
+                      if (file && file.exists) {
+                        FileSystem.deleteAsync(fileUri).catch((e) => log("Failed to delete:", e));
+                      }
+                    } catch (e) {
+                      log("Failed to clean up audio file:", e);
+                    }
+                    setSpeakingMessageId(null);
+                  }
+                  if (status.error) {
+                    log("TTS playback error:", status.error);
+                    setSpeakingMessageId(null);
+                  }
                 }
-              });
+              );
+              log("TTS audio playback started on native");
             }
           } catch (playbackError) {
             console.warn("Failed to play audio response", playbackError);
@@ -445,12 +469,13 @@ const ChatScreen = ({ navigation }) => {
       } finally {
         setIsProcessing(false);
         setIsRecording(false);
-        try {
-          if (uri && Platform.OS !== "web") {
-            await FileSystem.deleteAsync(uri, { idempotent: true });
+        // Clean up temp recording file
+        if (uri && Platform.OS !== "web") {
+          try {
+            await FileSystem.deleteAsync(uri);
+          } catch (cleanupErr) {
+            log("Failed to delete temp recording", cleanupErr);
           }
-        } catch (cleanupErr) {
-          log("Failed to delete temp recording", cleanupErr);
         }
       }
     },

@@ -463,22 +463,8 @@ const HomeScreen = ({ navigation }) => {
           },
         ]);
 
-        // If schema is complete, push ticket to Firebase DB
-        if (response?.classification && user) {
-          try {
-            const db = getFirebaseDatabase();
-            const ticketsRef = ref(db, "tickets");
-            await push(ticketsRef, {
-              ...response.classification,
-              transcript: transcriptText,
-              owner: user.uid,
-              createdAt: new Date().toISOString(),
-            });
-            log("Ticket pushed to Firebase DB");
-          } catch (dbError) {
-            log("Failed to push ticket to Firebase DB", dbError);
-          }
-        }
+        // Do not push tickets from the client. The server persists tickets and
+        // assigns queuePosition/team. Firebase listener will pick them up.
 
         // Play the TTS audio reply if the server returned it
         if (response?.audio?.data) {
@@ -527,7 +513,7 @@ const HomeScreen = ({ navigation }) => {
                     await sound.unloadAsync();
                   } catch (e) {}
                   try {
-                    await FileSystem.deleteAsync(fileUri, { idempotent: true });
+                    await FileSystem.deleteAsync(fileUri);
                   } catch (e) {}
                 }
               });
@@ -547,13 +533,13 @@ const HomeScreen = ({ navigation }) => {
       } finally {
         setIsProcessing(false);
         setIsRecording(false);
-        try {
-          if (uri && Platform.OS !== "web") {
-            await FileSystem.deleteAsync(uri, { idempotent: true });
+        if (uri && Platform.OS !== "web") {
+          try {
+            await FileSystem.deleteAsync(uri);
+          } catch (cleanupError) {
+            console.warn("Failed to delete temp recording", cleanupError);
+            log("Temp recording cleanup failed", cleanupError);
           }
-        } catch (cleanupError) {
-          console.warn("Failed to delete temp recording", cleanupError);
-          log("Temp recording cleanup failed", cleanupError);
         }
       }
     },

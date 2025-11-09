@@ -315,12 +315,33 @@ const backfillQueuePositions = async () => {
   const teamQueues = { maintenance: [], ra: [] };
 
   Object.entries(allTickets).forEach(([id, ticket]) => {
-    if (
-      (ticket.status === "open" || ticket.status === "in_progress") &&
-      ticket.team
-    ) {
-      teamQueues[ticket.team] = teamQueues[ticket.team] || [];
-      teamQueues[ticket.team].push({ id, ticket });
+    // Infer team from category if not set
+    const team =
+      ticket.team ||
+      (ticket.category === "Resident Life"
+        ? "ra"
+        : ticket.category === "Maintenance"
+        ? "maintenance"
+        : null);
+
+    console.log(`[server] Backfill checking ticket ${id.substring(0, 10)}:`, {
+      status: ticket.status,
+      team,
+      category: ticket.category,
+      hasQueue:
+        ticket.queuePosition !== null && ticket.queuePosition !== undefined,
+      queuePosition: ticket.queuePosition,
+    });
+
+    // Include tickets with undefined status (treat as open) or explicitly open/in_progress
+    const isOpenTicket =
+      !ticket.status ||
+      ticket.status === "open" ||
+      ticket.status === "in_progress";
+
+    if (isOpenTicket && team) {
+      teamQueues[team] = teamQueues[team] || [];
+      teamQueues[team].push({ id, ticket: { ...ticket, team } });
     }
   });
 
@@ -329,6 +350,10 @@ const backfillQueuePositions = async () => {
   for (const [team, tickets] of Object.entries(teamQueues)) {
     if (!tickets.length) continue;
 
+    console.log(
+      `[server] Processing ${tickets.length} tickets for team: ${team}`
+    );
+
     // Sort by timestamp
     tickets.sort((a, b) => {
       const timeA = new Date(a.ticket.timestamp || 0).getTime();
@@ -336,7 +361,7 @@ const backfillQueuePositions = async () => {
       return timeA - timeB;
     });
 
-    // Assign queue positions
+    // Assign queue positions, team, and status (if missing)
     tickets.forEach((item, index) => {
       const expectedPosition = index + 1;
       if (item.ticket.queuePosition !== expectedPosition) {
@@ -344,6 +369,16 @@ const backfillQueuePositions = async () => {
         console.log(
           `[server] Backfilling queue position: ${item.id} → ${expectedPosition} (${team})`
         );
+      }
+      // Also set team if it's missing
+      if (!item.ticket.team) {
+        updates[`tickets/${item.id}/team`] = team;
+        console.log(`[server] Backfilling team: ${item.id} → ${team}`);
+      }
+      // Set status to "open" if it's missing
+      if (!item.ticket.status) {
+        updates[`tickets/${item.id}/status`] = "open";
+        console.log(`[server] Backfilling status: ${item.id} → open`);
       }
     });
   }
