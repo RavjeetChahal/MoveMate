@@ -39,6 +39,14 @@ const ChatScreen = ({ navigation }) => {
 
   const log = (...args) => console.log("[Voice]", ...args);
 
+  // Initialize conversation ID if needed
+  useEffect(() => {
+    if (!conversationState.conversationId) {
+      log("Initializing new conversation ID:", conversationIdRef.current);
+      updateConversationState({ conversationId: conversationIdRef.current });
+    }
+  }, [conversationState.conversationId, updateConversationState]);
+
   useEffect(() => {
     log("Initializing microphone permissions for", Platform.OS);
 
@@ -260,6 +268,7 @@ const ChatScreen = ({ navigation }) => {
     }
     setIsProcessing(true);
     log("Submitting recording for transcription", uri ? { uri } : { file });
+    log("Using conversation ID:", conversationIdRef.current);
     let transcriptText = "";
     try {
       const response = await transcribeAudio({

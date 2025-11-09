@@ -17,7 +17,6 @@ const LoginScreen = ({ navigation }) => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const hasNavigatedRef = React.useRef(false);
-  const safetyTimeoutRef = React.useRef(null);
 
   console.log("[LoginScreen] ===== RENDER =====", {
     hasUser: !!user,
@@ -45,13 +44,14 @@ const LoginScreen = ({ navigation }) => {
     }
   }, [role, navigation]);
 
-  const clearSafetyTimeout = React.useCallback(() => {
-    if (safetyTimeoutRef.current) {
-      console.log("[LoginScreen] Clearing safety timeout");
-      clearTimeout(safetyTimeoutRef.current);
-      safetyTimeoutRef.current = null;
-    }
-  }, []);
+  // Reset navigation guard when screen is focused
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      console.log("[LoginScreen] Screen focused, resetting navigation guard");
+      hasNavigatedRef.current = false;
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const navigateToTarget = React.useCallback(() => {
     if (!role) {
@@ -65,10 +65,9 @@ const LoginScreen = ({ navigation }) => {
     const targetScreen = role === "resident" ? "Home" : "Dashboard";
     console.log(`[LoginScreen] Navigating to ${targetScreen}`);
     hasNavigatedRef.current = true;
-    clearSafetyTimeout();
     setLoading(false);
     navigation.replace(targetScreen);
-  }, [role, navigation, clearSafetyTimeout]);
+  }, [role, navigation]);
 
   const handleLogin = async () => {
     console.log("[LoginScreen] handleLogin called", {
@@ -76,7 +75,7 @@ const LoginScreen = ({ navigation }) => {
       hasPassword: !!password,
       loading,
     });
-    
+
     if (!email || !password) {
       console.log("[LoginScreen] Missing email or password");
       Alert.alert("Missing info", "Please enter your email and password.");
@@ -84,37 +83,32 @@ const LoginScreen = ({ navigation }) => {
     }
     if (password.length < 6) {
       console.log("[LoginScreen] Password too short");
-      Alert.alert("Invalid password", "Password must be at least 6 characters.");
+      Alert.alert(
+        "Invalid password",
+        "Password must be at least 6 characters."
+      );
       return;
     }
-    
+
     // Prevent multiple simultaneous login attempts
     if (loading) {
       console.log("[LoginScreen] Login already in progress, ignoring");
       return;
     }
-    
+
     console.log("[LoginScreen] Setting loading to true");
     setLoading(true);
     console.log("[LoginScreen] Flags set, proceeding with login");
-    
-    clearSafetyTimeout();
-    // Safety timeout: if navigation doesn't happen within 15 seconds, reset loading
-    safetyTimeoutRef.current = setTimeout(() => {
-      console.log("[LoginScreen] Safety timeout: resetting loading after 15s");
-      setLoading(false);
-      hasNavigatedRef.current = false;
-      safetyTimeoutRef.current = null;
-    }, 15000);
-    
+
     try {
       console.log("[LoginScreen] Attempting login for:", email);
       await login(email, password);
-      console.log("[LoginScreen] Login promise resolved, attempting navigation");
+      console.log(
+        "[LoginScreen] Login promise resolved, attempting navigation"
+      );
       navigateToTarget();
     } catch (err) {
       console.error("[LoginScreen] Login failed:", err);
-      clearSafetyTimeout();
       const errorMessage =
         err.message ||
         err.code ||
@@ -134,22 +128,25 @@ const LoginScreen = ({ navigation }) => {
       loading,
       hasNavigated: hasNavigatedRef.current,
     });
-    
+
     if (user && role) {
       if (!hasNavigatedRef.current) {
         navigateToTarget();
       } else {
-        console.log("[LoginScreen] Navigation already performed for this session");
+        console.log(
+          "[LoginScreen] Navigation already performed for this session"
+        );
       }
     } else if (!user) {
       if (hasNavigatedRef.current) {
-        console.log("[LoginScreen] User logged out, resetting navigation guard");
+        console.log(
+          "[LoginScreen] User logged out, resetting navigation guard"
+        );
       }
       hasNavigatedRef.current = false;
-      clearSafetyTimeout();
       setLoading(false);
     }
-  }, [user, role, loading, navigateToTarget, clearSafetyTimeout]);
+  }, [user, role, navigateToTarget]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
