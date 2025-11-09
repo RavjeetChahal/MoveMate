@@ -36,9 +36,9 @@ const allowedOrigins = (
 const webBuildPath = path.join(__dirname, "..", "dist");
 app.use(
   express.static(webBuildPath, {
-    setHeaders: (res, path) => {
-      // Disable caching for HTML files to ensure users get the latest version
-      if (path.endsWith(".html")) {
+    setHeaders: (res, filePath) => {
+      // Disable caching for HTML and JS files to ensure users get the latest version
+      if (filePath.endsWith(".html") || filePath.endsWith(".js")) {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         res.setHeader("Pragma", "no-cache");
         res.setHeader("Expires", "0");
