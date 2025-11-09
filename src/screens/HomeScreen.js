@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { CommonActions } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system/legacy";
@@ -24,7 +25,10 @@ import { MicButton } from "../components/MicButton";
 import { colors } from "../theme/colors";
 import { mockConversation } from "../assets/data/issues";
 import { useAuth } from "../context/AuthContext";
+import { getFirebaseDatabase } from "../services/firebase";
+import { ref, push, onValue } from "firebase/database";
 import { transcribeAudio, pingServer } from "../services/api";
+// Home screen component for resident users
 
 const HomeScreen = ({ navigation }) => {
   const [messages, setMessages] = useState(mockConversation);
@@ -33,11 +37,13 @@ const HomeScreen = ({ navigation }) => {
   const [permissionGranted, setPermissionGranted] = useState(null);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState(null);
+  const [tickets, setTickets] = useState([]);
+  const [loadingTickets, setLoadingTickets] = useState(true);
   const recordingRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const webStreamRef = useRef(null);
   const webChunksRef = useRef([]);
-  const { resetRole } = useAuth();
+  const { logout, user } = useAuth();
   const { conversationState, updateConversationState } = useConversation();
   const conversationIdRef = useRef(
     conversationState.conversationId || `conv-${Date.now()}`
@@ -49,6 +55,95 @@ const HomeScreen = ({ navigation }) => {
       updateConversationState({ conversationId: conversationIdRef.current });
     }
   }, [conversationState.conversationId, updateConversationState]);
+
+  // Fetch resident's previous tickets from Firebase
+  const parseDateValue = useCallback((value) => {
+    if (!value && value !== 0) {
+      return null;
+    }
+    if (typeof value === "object" && value?.seconds) {
+      return new Date(value.seconds * 1000).toISOString();
+    }
+    const date =
+      typeof value === "number" ? new Date(value) : new Date(String(value));
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return date.toISOString();
+  }, []);
+
+  const formatDisplayDate = useCallback((value) => {
+    if (!value) return "Unknown";
+    try {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return "Unknown";
+      }
+      const formatter = new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      return formatter.format(date);
+    } catch {
+      return "Unknown";
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    setLoadingTickets(true);
+    try {
+      const db = getFirebaseDatabase();
+      if (!db) return;
+      const ticketsRef = ref(db, "tickets");
+      const unsubscribe = onValue(ticketsRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        const normalizeTicket = ([id, ticket]) => {
+          const reportedAt =
+            parseDateValue(
+              ticket.reportedAt ||
+                ticket.reported_at ||
+                ticket.createdAt ||
+                ticket.created_at ||
+                ticket.timestamp
+            ) || null;
+          return {
+            id,
+            status: ticket.status || "open",
+            urgency: ticket.urgency || "unknown",
+            summary: ticket.summary || ticket.transcript || "No issue reported.",
+            location: ticket.location || "Unknown",
+            reportedAt,
+            queuePosition:
+              ticket.queuePosition ?? ticket.queue_position ?? null,
+            raw: ticket,
+          };
+        };
+
+        let userTickets = Object.entries(data)
+          .filter(([, ticket]) => ticket.owner === user.uid)
+          .map(normalizeTicket);
+        // Sort tickets by createdAt descending (latest first)
+        userTickets = userTickets.sort(
+          (a, b) =>
+            (b.reportedAt ? new Date(b.reportedAt).getTime() : 0) -
+            (a.reportedAt ? new Date(a.reportedAt).getTime() : 0)
+        );
+        setTickets(userTickets);
+        setLoadingTickets(false);
+        // If there are no tickets, redirect to chat page
+        if (userTickets.length === 0) {
+          navigation.replace("Chat");
+        }
+      });
+      return () => unsubscribe();
+    } catch (err) {
+      setLoadingTickets(false);
+    }
+  }, [user?.uid, navigation]);
 
   const log = (...args) => console.log("[Voice]", ...args);
 
@@ -218,15 +313,15 @@ const HomeScreen = ({ navigation }) => {
     setError(null);
     try {
       log("Configuring Audio mode for native recording…");
-      const audioMode = {
+      await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
+        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
         playsInSilentModeIOS: true,
         shouldDuckAndroid: true,
+        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         playThroughEarpieceAndroid: false,
         staysActiveInBackground: false,
-      };
-      log("Audio mode configuration", audioMode);
-      await Audio.setAudioModeAsync(audioMode);
+      });
 
       const recording = new Audio.Recording();
       await recording.prepareToRecordAsync(
@@ -295,23 +390,28 @@ const HomeScreen = ({ navigation }) => {
     async ({ uri, file }) => {
       if (!uri && !file) {
         log("handleTranscription called with no recording payload");
+        setIsProcessing(false);
+        setIsRecording(false);
         return;
       }
       log("Submitting recording for transcription", uri ? { uri } : { file });
       setIsProcessing(true);
 
       const conversationId = conversationIdRef.current;
+      let transcriptText = "";
       try {
         const response = await transcribeAudio({
           uri,
           file,
           conversationId: conversationIdRef.current,
         });
-        const transcriptText = response?.transcript ?? "";
+        transcriptText = response?.transcript ?? "";
 
         if (!transcriptText) {
           setError("No speech detected. Try speaking closer to your device.");
           log("Transcription returned empty text");
+          setIsProcessing(false);
+          setIsRecording(false);
           return;
         }
 
@@ -330,10 +430,28 @@ const HomeScreen = ({ navigation }) => {
             sender: "MoveMate",
             text:
               response?.reply ||
-              "Thanks! I’m routing this to the right team and will update you once it’s picked up.",
+              "Thanks! I'm routing this to the right team and will update you once it's picked up.",
             timestamp: Date.now(),
           },
         ]);
+
+        // If schema is complete, push ticket to Firebase DB
+        if (response?.classification && user) {
+          try {
+            const db = getFirebaseDatabase();
+            const ticketsRef = ref(db, "tickets");
+            await push(ticketsRef, {
+              ...response.classification,
+              transcript: transcriptText,
+              owner: user.uid,
+              createdAt: new Date().toISOString(),
+            });
+            log("Ticket pushed to Firebase DB");
+          } catch (dbError) {
+            log("Failed to push ticket to Firebase DB", dbError);
+          }
+        }
+
         // Play the TTS audio reply if the server returned it
         if (response?.audio?.data) {
           const contentType = response.audio.contentType || "audio/mpeg";
@@ -357,6 +475,9 @@ const HomeScreen = ({ navigation }) => {
                 await audioEl.play();
               } catch (playErr) {
                 console.warn("Audio playback failed (web):", playErr);
+                setError(
+                  "Audio playback failed. Try again or check your browser."
+                );
               }
               audioEl.onended = () => URL.revokeObjectURL(audioUrl);
             } else {
@@ -385,7 +506,11 @@ const HomeScreen = ({ navigation }) => {
             }
           } catch (playbackError) {
             console.warn("Failed to play audio response", playbackError);
+            setError("Audio playback failed. Try again or check your device.");
           }
+        } else {
+          log("No audio data returned from backend");
+          setError("No audio reply from agent. Try again or contact support.");
         }
       } catch (err) {
         console.error("Transcription failed", err);
@@ -393,6 +518,7 @@ const HomeScreen = ({ navigation }) => {
         log("Transcription request errored", err);
       } finally {
         setIsProcessing(false);
+        setIsRecording(false);
         try {
           if (uri && Platform.OS !== "web") {
             await FileSystem.deleteAsync(uri, { idempotent: true });
@@ -403,7 +529,7 @@ const HomeScreen = ({ navigation }) => {
         }
       }
     },
-    [setMessages, conversationIdRef]
+    [setMessages, conversationIdRef, user]
   );
 
   const handleMicPress = useCallback(async () => {
@@ -452,11 +578,18 @@ const HomeScreen = ({ navigation }) => {
     stopWebRecordingAsync,
   ]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     log("Signing out user");
     conversationIdRef.current = `conv-${Date.now()}`;
     updateConversationState({});
-    resetRole();
+    await logout();
+    // Reset navigation stack to RoleSelect screen
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: "RoleSelect" }],
+      })
+    );
   };
 
   return (
@@ -466,55 +599,88 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.header}>
           <View>
             <Text style={styles.eyebrow}>{greeting}</Text>
-            <Text style={styles.title}>Let’s get that fixed</Text>
+            <Text style={styles.title}>Your Requests</Text>
             <Text style={styles.subtitle}>
-              Use your voice to tell MoveMate what’s going on.
+              Here are your previous requests. Tap any to view details or start
+              a new chat.
             </Text>
-            <TouchableOpacity
-              style={styles.dashboardLink}
-              onPress={() => navigation.navigate("Dashboard")}
-            >
-              <Text style={styles.dashboardLinkText}>
-                Preview worker dashboard →
-              </Text>
-            </TouchableOpacity>
           </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
             <Text style={styles.logoutText}>Sign out</Text>
           </TouchableOpacity>
         </View>
 
-        <FlatList
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <ChatBubble sender={item.sender} text={item.text} />
-          )}
-          contentContainerStyle={styles.chatList}
-          showsVerticalScrollIndicator={false}
-        />
-
-        <View style={styles.transcriptContainer}>
-          <Text style={styles.transcriptLabel}>Latest transcript</Text>
-          <Text style={styles.transcriptText}>
-            {transcript ||
-              "Tap the mic to start a new report and see the text live."}
+        {loadingTickets ? (
+          <Text style={{ textAlign: "center", marginTop: 24 }}>
+            Loading your requests…
           </Text>
-          {error && <Text style={styles.errorText}>{error}</Text>}
-        </View>
+        ) : tickets.length > 0 ? (
+          <>
+            <FlatList
+              data={tickets}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => {
+                const statusValue = (item.status || "").toLowerCase();
+                const showQueue =
+                  statusValue === "open" || statusValue === "in_progress";
+                const queueLabel =
+                  item.queuePosition && Number(item.queuePosition) > 0
+                    ? `#${item.queuePosition}`
+                    : "Assigning…";
 
-        <View style={styles.footer}>
-          <MicButton
-            isRecording={isRecording}
-            isProcessing={isProcessing}
-            onPress={handleMicPress}
-            label={
-              isRecording
-                ? "Tap again to submit your report"
-                : "Tap to record your voice note"
-            }
-          />
-        </View>
+                return (
+                  <View style={styles.ticketCard}>
+                    <Text style={styles.ticketId}>Request #{item.id}</Text>
+                    <Text style={styles.ticketSummary}>{item.summary}</Text>
+                    <Text style={styles.ticketMeta}>
+                      Status: {item.status || "Open"}
+                    </Text>
+                    <Text style={styles.ticketMeta}>
+                      Urgency: {item.urgency || "Unknown"}
+                    </Text>
+                    <Text style={styles.ticketMeta}>
+                      Location: {item.location || "Unknown"}
+                    </Text>
+                    {showQueue && (
+                      <Text style={styles.ticketMeta}>
+                        Queue position: {queueLabel}
+                      </Text>
+                    )}
+                    <Text style={styles.ticketMeta}>
+                      Reported: {formatDisplayDate(item.reportedAt)}
+                    </Text>
+                  </View>
+                );
+              }}
+              contentContainerStyle={styles.chatList}
+              showsVerticalScrollIndicator={false}
+            />
+            {/* Only show Start New Chat button if tickets exist */}
+            <TouchableOpacity
+              style={{
+                marginTop: 32,
+                alignSelf: "center",
+                padding: 16,
+                borderRadius: 999,
+                backgroundColor: colors.primary,
+                minWidth: 200,
+              }}
+              accessibilityLabel="Start a new chat with the agent"
+              testID="start-new-chat"
+              onPress={() => navigation.navigate("Chat")}
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontWeight: "700",
+                  textAlign: "center",
+                }}
+              >
+                Start New Chat
+              </Text>
+            </TouchableOpacity>
+          </>
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -577,6 +743,27 @@ const styles = StyleSheet.create({
   chatList: {
     flexGrow: 1,
     paddingBottom: 16,
+  },
+  ticketCard: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginBottom: 16,
+    gap: 4,
+  },
+  ticketId: {
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  ticketSummary: {
+    color: colors.text,
+    fontWeight: "600",
+  },
+  ticketMeta: {
+    color: colors.muted,
+    fontSize: 13,
   },
   transcriptContainer: {
     backgroundColor: colors.card,

@@ -5,6 +5,8 @@ const cors = require("cors");
 const { formidable } = require("formidable");
 const { OpenAI } = require("openai");
 const admin = require("firebase-admin");
+const conversationManager = require("./conversation-manager");
+const { getConversation, updateConversation } = conversationManager;
 require("dotenv").config();
 if (!process.env.OPENAI_API_KEY) {
   console.warn(
@@ -90,12 +92,22 @@ const openaiClient = () => {
 
 const classifyTranscript = async ({ transcript, conversationId }) => {
   const client = openaiClient();
-  const {
-    getConversation,
-    updateConversation,
-  } = require("./conversation-manager");
 
   const currentState = getConversation(conversationId);
+  const conversationStart = currentState?.timestamp || new Date().toISOString();
+  const contextForPrompt = { ...currentState, timestamp: conversationStart };
+
+  try {
+    console.log("[server] Conversation context for prompt", {
+      conversationId,
+      context: contextForPrompt,
+    });
+  } catch (logErr) {
+    console.warn(
+      "[server] Failed to log context for prompt",
+      logErr.message || logErr
+    );
+  }
 
   const systemPrompt = `
 You are MoveMate, an AI assistant that triages dorm and residential life issues.
@@ -104,7 +116,7 @@ Always respond in the following JSON format, preserving any previously collected
 {
   "category": "Maintenance | Resident Life",
   "issue_type": "Short label for the issue",
-  "location": "Where the issue occurs or "Unknown"",
+  "location": "Where the issue occurs or \"Unknown\"",
   "urgency": "HIGH | MEDIUM | LOW",
   "summary": "One-sentence summary of the issue",
   "reply": "Friendly acknowledgement and next steps",
@@ -120,6 +132,8 @@ Urgency rules:
 - LOW: cosmetic damage, general questions, mild discomfort, information requests.
 
 If any required field is missing or incomplete, set needs_more_info to true and ask for the specific missing details in the reply.
+
+When ALL required fields (category, issue_type, location, urgency, summary) are complete and needs_more_info is false, give a warm goodbye in the reply thanking the user for reporting the issue and letting them know the ticket has been created and the appropriate team will be notified. Make it friendly and reassuring.
 `;
 
   const completion = await client.chat.completions.create({
@@ -141,7 +155,22 @@ If any required field is missing or incomplete, set needs_more_info to true and 
   }
 
   const classification = JSON.parse(raw);
+  if (!classification.timestamp) {
+    classification.timestamp = conversationStart;
+  }
   updateConversation(conversationId, classification);
+  try {
+    const mergedContext = getConversation(conversationId);
+    console.log("[server] Conversation context updated", {
+      conversationId,
+      context: mergedContext,
+    });
+  } catch (logErr) {
+    console.warn(
+      "[server] Failed to log conversation context",
+      logErr.message || logErr
+    );
+  }
 
   return classification;
 };
@@ -237,20 +266,41 @@ app.post("/api/processInput", (req, res) => {
 
       let classification = null;
       let ticketRecord = null;
+      const conversationId = fields.conversationId?.[0] || `conv-${Date.now()}`;
+      console.log(
+        "[server] Processing request with conversationId:",
+        conversationId
+      );
 
       try {
-        classification = await classifyTranscript({ transcript, conversationId });
-        ticketRecord = await persistTicket({
+        classification = await classifyTranscript({
           transcript,
-          category: classification.category,
-          issue_type: classification.issue_type,
-          location: classification.location,
-          urgency: classification.urgency,
-          summary: classification.summary,
+          conversationId,
         });
         console.log("[server] Classification complete", classification);
-        if (ticketRecord) {
-          console.log("[server] Ticket persisted", ticketRecord.id);
+
+        // Only persist ticket if schema is complete (needs_more_info = false)
+        if (classification && !classification.needs_more_info) {
+          ticketRecord = await persistTicket({
+            transcript,
+            category: classification.category,
+            issue_type: classification.issue_type,
+            location: classification.location,
+            urgency: classification.urgency,
+            summary: classification.summary,
+            conversation_timestamp: classification.timestamp,
+          });
+          if (ticketRecord) {
+            console.log(
+              "[server] Ticket persisted (schema complete)",
+              ticketRecord.id
+            );
+          }
+        } else {
+          console.log(
+            "[server] Ticket NOT persisted - more info needed",
+            classification
+          );
         }
       } catch (classificationError) {
         console.warn(
@@ -280,6 +330,7 @@ app.post("/api/processInput", (req, res) => {
           ticket: ticketRecord,
           classification,
           reply,
+          context: getConversation(conversationId),
           audio: {
             data: audioBase64,
             contentType: "audio/mpeg",
@@ -297,6 +348,7 @@ app.post("/api/processInput", (req, res) => {
           ticket: ticketRecord,
           classification,
           reply,
+          context: getConversation(conversationId),
         });
         console.log("[server] Response (text-only) sent to client");
         console.timeEnd("[server] whisper+gpt pipeline");
@@ -316,6 +368,11 @@ app.post("/api/processInput", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
+  console.log("[server] /health check", {
+    origin: req.headers.origin,
+    ip: req.ip,
+    ua: req.headers["user-agent"],
+  });
   res.json({ status: "ok" });
 });
 
