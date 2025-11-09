@@ -8,7 +8,7 @@ const getDefaultApiUrl = () => {
   const PRODUCTION_API = "https://movemate-39ed.onrender.com";
   
   // Toggle this for local development
-  const USE_LOCAL_SERVER = true; // Set to false for production
+  const USE_LOCAL_SERVER = false; // Set to false for production
   
   if (USE_LOCAL_SERVER) {
     // Local development mode
