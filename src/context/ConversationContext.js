@@ -16,7 +16,9 @@ const requiredFields = [
 ];
 
 export const ConversationProvider = ({ children }) => {
-  const [conversationState, setConversationState] = useState({});
+  const [conversationState, setConversationState] = useState({
+    messages: [], // Store chat messages here
+  });
 
   const updateConversationState = useCallback((newData) => {
     try {
@@ -34,7 +36,7 @@ export const ConversationProvider = ({ children }) => {
 
   const clearConversationState = useCallback(() => {
     console.log("[Conversation] clearConversationState");
-    setConversationState({});
+    setConversationState({ messages: [] });
   }, []);
 
   const isSchemaComplete = requiredFields.every(

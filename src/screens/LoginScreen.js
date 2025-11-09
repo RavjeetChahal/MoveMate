@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
+import { CommonActions } from "@react-navigation/native";
 import { colors } from "../theme/colors";
 import { useAuth } from "../context/AuthContext";
 
@@ -16,37 +17,94 @@ const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const hasNavigatedRef = React.useRef(false);
+
+  console.log("[LoginScreen] Render", {
+    hasUser: !!user,
+    hasRole: !!role,
+    loading,
+    hasNavigated: hasNavigatedRef.current,
+  });
 
   useEffect(() => {
+    console.log("[LoginScreen] Role check useEffect", { role });
     if (!role) {
       // If user somehow lands on Login without selecting a role, send them back
+      console.log("[LoginScreen] No role, redirecting to RoleSelect");
       navigation.replace("RoleSelect");
     }
   }, [role, navigation]);
 
   const handleLogin = async () => {
+    console.log("[LoginScreen] handleLogin called", {
+      hasEmail: !!email,
+      hasPassword: !!password,
+      loading,
+    });
+    
     if (!email || !password) {
+      console.log("[LoginScreen] Missing email or password");
       Alert.alert("Missing info", "Please enter your email and password.");
       return;
     }
+    if (password.length < 6) {
+      console.log("[LoginScreen] Password too short");
+      Alert.alert("Invalid password", "Password must be at least 6 characters.");
+      return;
+    }
+    
+    // Prevent multiple simultaneous login attempts
+    if (loading) {
+      console.log("[LoginScreen] Login already in progress, ignoring");
+      return;
+    }
+    
+    console.log("[LoginScreen] Setting loading to true");
     setLoading(true);
     try {
+      console.log("[LoginScreen] Attempting login for:", email);
       await login(email, password);
+      console.log("[LoginScreen] Login successful, waiting for auth state update");
+      // Note: loading state will be reset by navigation useEffect
     } catch (err) {
-      Alert.alert("Login failed", err.message || "Could not log in.");
-    } finally {
+      console.error("[LoginScreen] Login failed:", err);
+      const errorMessage =
+        err.message ||
+        err.code ||
+        "Could not sign in. Please check your credentials.";
+      Alert.alert("Sign in failed", errorMessage);
+      console.log("[LoginScreen] Resetting loading to false after error");
       setLoading(false);
     }
   };
 
   // Navigate after login if user and role are set
   React.useEffect(() => {
-    if (user && role) {
-      if (role === "resident") {
-        navigation.replace("Home");
-      } else {
-        navigation.replace("Dashboard");
-      }
+    console.log("[LoginScreen] Navigation useEffect", {
+      hasUser: !!user,
+      hasRole: !!role,
+      hasNavigated: hasNavigatedRef.current,
+    });
+    
+    if (user && role && !hasNavigatedRef.current) {
+      const targetScreen = role === "resident" ? "Home" : "Dashboard";
+      console.log(`[LoginScreen] Conditions met, navigating to ${targetScreen}`);
+      hasNavigatedRef.current = true;
+      console.log("[LoginScreen] Resetting loading to false before navigation");
+      setLoading(false);
+      console.log("[LoginScreen] Dispatching navigation reset");
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: targetScreen }],
+        })
+      );
+    } else if (!user) {
+      // Reset navigation flag when user logs out
+      console.log("[LoginScreen] User logged out, resetting hasNavigated flag");
+      hasNavigatedRef.current = false;
+    } else {
+      console.log("[LoginScreen] Navigation conditions not met");
     }
   }, [user, role, navigation]);
 
@@ -55,9 +113,9 @@ const LoginScreen = ({ navigation }) => {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>MoveMate</Text>
-          <Text style={styles.title}>Sign in to MoveMate</Text>
+          <Text style={styles.title}>Welcome to MoveMate</Text>
           <Text style={styles.subtitle}>
-            Enter your email and password to continue.
+            Enter your email and password to sign in or create a new account.
           </Text>
         </View>
 
@@ -83,7 +141,7 @@ const LoginScreen = ({ navigation }) => {
           disabled={loading}
         >
           <Text style={styles.loginButtonText}>
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? "Please wait..." : "Continue"}
           </Text>
         </TouchableOpacity>
 

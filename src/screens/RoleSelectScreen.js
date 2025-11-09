@@ -34,8 +34,10 @@ const roleOptions = [
 
 const RoleSelectScreen = ({ navigation }) => {
   const { setRole } = useAuth();
+  // Remove the auto-redirect logic - let LoginScreen handle navigation after login
 
   const handleSelect = (roleKey) => {
+    console.log(`[RoleSelect] Role selected: ${roleKey}`);
     setRole(roleKey);
     navigation.navigate("Login");
   };

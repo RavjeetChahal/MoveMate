@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { CommonActions } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { colors } from "../theme/colors";
 import { IssueCard } from "../components/IssueCard";
@@ -17,7 +18,7 @@ const urgencyOrder = ["HIGH", "MEDIUM", "LOW"];
 
 const DashboardScreen = ({ navigation }) => {
   const [filterUrgency, setFilterUrgency] = useState("ALL");
-  const { resetRole } = useAuth();
+  const { logout } = useAuth();
   const issuesData = useIssues();
 
   const issues = useMemo(() => {
@@ -29,8 +30,16 @@ const DashboardScreen = ({ navigation }) => {
     return sorted.filter((issue) => issue.urgency === filterUrgency);
   }, [filterUrgency, issuesData]);
 
-  const handleLogout = () => {
-    resetRole();
+  const handleLogout = async () => {
+    console.log("[Dashboard] Signing out user");
+    await logout();
+    // Reset navigation stack to RoleSelect screen
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: "RoleSelect" }],
+      })
+    );
   };
 
   return (

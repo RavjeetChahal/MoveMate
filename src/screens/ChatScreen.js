@@ -22,7 +22,8 @@ import { ref, push } from "firebase/database";
 const ChatScreen = ({ navigation }) => {
   const { conversationState, updateConversationState } = useConversation();
   const { user, logout } = useAuth();
-  const [messages, setMessages] = useState([]);
+  // Use messages from conversation context instead of local state
+  const messages = conversationState.messages || [];
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(null);
@@ -276,21 +277,24 @@ const ChatScreen = ({ navigation }) => {
       }
       setTranscript(transcriptText);
       log("Transcription succeeded", { transcript: transcriptText });
-      setMessages((prev) => [
-        ...prev,
+      
+      // Add messages to conversation context
+      const newMessages = [
+        ...messages,
         {
-          id: `msg-${prev.length + 1}`,
+          id: `msg-${messages.length + 1}`,
           sender: "Resident",
           text: transcriptText,
           timestamp: Date.now(),
         },
         {
-          id: `msg-${prev.length + 2}`,
+          id: `msg-${messages.length + 2}`,
           sender: "MoveMate",
           text: response?.reply || "Thanks! We'll get back to you soon.",
           timestamp: Date.now(),
         },
-      ]);
+      ];
+      updateConversationState({ messages: newMessages });
       // Store ticket in Firebase ONLY if schema is complete (needs_more_info = false)
       if (
         response?.classification &&
@@ -395,7 +399,7 @@ const ChatScreen = ({ navigation }) => {
         log("Failed to delete temp recording", cleanupErr);
       }
     }
-  }, [user]);
+  }, [user, messages, updateConversationState]);
 
   const handleMicPress = useCallback(async () => {
     log("Mic button pressed", {
@@ -445,7 +449,7 @@ const ChatScreen = ({ navigation }) => {
   const handleLogout = async () => {
     log("Signing out user from ChatScreen");
     conversationIdRef.current = `conv-${Date.now()}`;
-    updateConversationState({});
+    updateConversationState({ messages: [] }); // Clear messages on logout
     await logout();
     // Reset navigation stack to RoleSelect screen
     navigation.dispatch(
@@ -456,6 +460,13 @@ const ChatScreen = ({ navigation }) => {
     );
   };
 
+  const handleBackPress = () => {
+    log("User leaving chat, clearing messages");
+    // Clear messages when user leaves chat
+    updateConversationState({ messages: [] });
+    navigation.goBack();
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -463,7 +474,7 @@ const ChatScreen = ({ navigation }) => {
           accessibilityLabel="Back to Home"
           testID="back-from-chat"
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={handleBackPress}
         >
           <Text style={styles.backText}>{"< Back"}</Text>
         </TouchableOpacity>
