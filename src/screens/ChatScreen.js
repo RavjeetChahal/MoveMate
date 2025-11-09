@@ -193,10 +193,8 @@ const ChatScreen = ({ navigation }) => {
       log("Configuring Audio mode for native recording…");
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
         playsInSilentModeIOS: true,
         shouldDuckAndroid: true,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         playThroughEarpieceAndroid: false,
         staysActiveInBackground: false,
       });
@@ -369,31 +367,63 @@ const ChatScreen = ({ navigation }) => {
               setSpeakingMessageId(null);
             };
           } else {
-            // Native: write the base64 to a temp file and play using expo-av
+            // Native: use data URI for iOS/Android
             log("Playing TTS audio on native");
-            const filename = `movemate-reply-${Date.now()}.mp3`;
-            const fileUri = FileSystem.cacheDirectory + filename;
-            await FileSystem.writeAsStringAsync(fileUri, base64, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-            const { sound } = await Audio.Sound.createAsync(
-              { uri: fileUri },
-              { shouldPlay: true }
-            );
-            log("TTS audio playback started");
-            sound.setOnPlaybackStatusUpdate(async (status) => {
-              if (status?.didJustFinish) {
-                try {
-                  await sound.unloadAsync();
-                  log("TTS sound unloaded");
-                } catch (e) {}
-                try {
-                  await FileSystem.deleteAsync(fileUri, { idempotent: true });
-                  log("TTS temp file deleted");
-                } catch (e) {}
-                setSpeakingMessageId(null);
-              }
-            });
+            
+            try {
+              // Set audio mode for playback
+              await Audio.setAudioModeAsync({
+                allowsRecordingIOS: false,
+                playsInSilentModeIOS: true,
+                staysActiveInBackground: false,
+              });
+              
+              // Create data URI from base64
+              const dataUri = `data:${contentType};base64,${base64}`;
+              log("Created data URI, length:", dataUri.length);
+              
+              const { sound } = await Audio.Sound.createAsync(
+                { uri: dataUri },
+                { shouldPlay: true },
+                (status) => {
+                  log("Playback status:", status);
+                  if (status.didJustFinish) {
+                    sound.unloadAsync().catch(e => log("Failed to unload sound:", e));
+                    setSpeakingMessageId(null);
+                  }
+                  if (status.error) {
+                    log("Playback error:", status.error);
+                    setSpeakingMessageId(null);
+                  }
+                }
+              );
+              log("TTS audio playback started on native");
+            } catch (nativePlayError) {
+              log("Native playback failed, trying file method:", nativePlayError);
+              
+              // Fallback: write to file
+              const filename = `movemate-reply-${Date.now()}.mp3`;
+              const fileUri = FileSystem.cacheDirectory + filename;
+              await FileSystem.writeAsStringAsync(fileUri, base64, {
+                encoding: FileSystem.EncodingType.Base64,
+              });
+              log("Wrote audio to file:", fileUri);
+              
+              const { sound } = await Audio.Sound.createAsync(
+                { uri: fileUri },
+                { shouldPlay: true }
+              );
+              log("TTS audio playback started from file");
+              sound.setOnPlaybackStatusUpdate(async (status) => {
+                if (status?.didJustFinish) {
+                  try {
+                    await sound.unloadAsync();
+                    await FileSystem.deleteAsync(fileUri, { idempotent: true });
+                  } catch (e) {}
+                  setSpeakingMessageId(null);
+                }
+              });
+            }
           }
         } catch (playbackError) {
           console.warn("Failed to play audio response", playbackError);

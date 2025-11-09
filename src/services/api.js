@@ -3,16 +3,43 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 // Determine default API URL based on platform
 
-const DEFAULT_API_URL = Platform.select({
-  ios: "http://localhost:3000",
-  android: "http://10.0.2.2:3000",
-  web: typeof window !== "undefined" && window.location.origin.includes("localhost")
-    ? "http://localhost:3000"
-    : typeof window !== "undefined" 
-    ? window.location.origin 
-    : "http://localhost:3000",
-  default: "http://localhost:3000",
-});
+const getDefaultApiUrl = () => {
+  // For production mobile apps, always use the deployed server
+  const PRODUCTION_API = "https://movemate-39ed.onrender.com";
+  
+  // Toggle this for local development
+  const USE_LOCAL_SERVER = true; // Set to false for production
+  
+  if (USE_LOCAL_SERVER) {
+    // Local development mode
+    if (Platform.OS === 'ios') {
+      return "http://localhost:3000";
+    }
+    if (Platform.OS === 'android') {
+      return "http://10.0.2.2:3000";
+    }
+  } else {
+    // Production mode - use deployed server
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      return PRODUCTION_API;
+    }
+  }
+  
+  if (Platform.OS === 'web') {
+    try {
+      if (typeof window !== "undefined" && window.location && window.location.origin) {
+        // For web, use the same origin (Render serves both frontend and backend)
+        return window.location.origin;
+      }
+    } catch (e) {
+      console.warn("[API] Error accessing window.location:", e);
+    }
+  }
+  
+  return USE_LOCAL_SERVER ? "http://localhost:3000" : PRODUCTION_API;
+};
+
+const DEFAULT_API_URL = getDefaultApiUrl();
 
 // Remove trailing slash to prevent double-slash in URLs
 const API_BASE_URL = (
@@ -86,7 +113,7 @@ export const transcribeAudio = async ({
     const response = await axios.post(`${API_BASE_URL}/api/processInput`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
       onUploadProgress,
-      timeout: 20000,
+      timeout: 60000, // 60 seconds for OpenAI Whisper + GPT processing
     });
 
     console.log("[API] Transcription response received", {
