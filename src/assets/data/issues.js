@@ -64,7 +64,7 @@ export const mockIssues = [
 export const mockConversation = [
   {
     id: 'msg-1',
-    sender: 'MoveMate',
+    sender: 'Resi',
     text: 'Hi! I’m listening. Tell me what needs attention today.',
     timestamp: Date.now() - 1000 * 60 * 5,
   },
@@ -76,7 +76,7 @@ export const mockConversation = [
   },
   {
     id: 'msg-3',
-    sender: 'MoveMate',
+    sender: 'Resi',
     text: 'Thanks! Tap the mic anytime to add more detail.',
     timestamp: Date.now() - 1000 * 60,
   },

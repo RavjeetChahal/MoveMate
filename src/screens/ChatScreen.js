@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   SafeAreaView,
   View,
@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   FlatList,
   Platform,
+  Animated,
+  Easing,
 } from "react-native";
 import { CommonActions } from "@react-navigation/native";
 import { useConversation } from "../context/ConversationContext";
@@ -23,7 +25,6 @@ import { ref, push } from "firebase/database";
 const ChatScreen = ({ navigation }) => {
   const { conversationState, updateConversationState } = useConversation();
   const { user, logout } = useAuth();
-  // Use messages from conversation context instead of local state
   const messages = conversationState.messages || [];
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -38,10 +39,52 @@ const ChatScreen = ({ navigation }) => {
   const conversationIdRef = useRef(
     conversationState.conversationId || `conv-${Date.now()}`
   );
+  const recordShimmer = useRef(new Animated.Value(0)).current;
+  const recordIntensity = useRef(new Animated.Value(0)).current;
+  const recordLoopRef = useRef(null);
+  const AnimatedLinearGradient = useMemo(
+    () => Animated.createAnimatedComponent(LinearGradient),
+    []
+  );
+  const buttonGradientColors = useMemo(
+    () => ["#8b5cf6", "#6366f1", "#3b82f6", "#6366f1", "#8b5cf6"],
+    []
+  );
+  const buttonGradientTranslate = useMemo(
+    () =>
+      recordShimmer.interpolate({
+        inputRange: [0, 1],
+        outputRange: [-80, 80],
+      }),
+    [recordShimmer]
+  );
+  const buttonGradientOpacity = useMemo(
+    () =>
+      recordIntensity.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.92, 1],
+      }),
+    [recordIntensity]
+  );
+  const haloOpacity = useMemo(
+    () =>
+      recordIntensity.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, 0.75],
+      }),
+    [recordIntensity]
+  );
+  const haloScale = useMemo(
+    () =>
+      recordIntensity.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.97, 1.08],
+      }),
+    [recordIntensity]
+  );
 
   const log = (...args) => console.log("[Voice]", ...args);
 
-  // Initialize conversation ID if needed
   useEffect(() => {
     if (!conversationState.conversationId) {
       log("Initializing new conversation ID:", conversationIdRef.current);
@@ -115,6 +158,34 @@ const ChatScreen = ({ navigation }) => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    recordShimmer.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(recordShimmer, {
+        toValue: 1,
+        duration: 6000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    recordLoopRef.current = loop;
+    loop.start();
+
+    return () => {
+      recordLoopRef.current?.stop();
+      recordLoopRef.current = null;
+    };
+  }, [recordShimmer]);
+
+  useEffect(() => {
+    Animated.timing(recordIntensity, {
+      toValue: isRecording ? 1 : 0,
+      duration: isRecording ? 260 : 420,
+      easing: isRecording ? Easing.out(Easing.cubic) : Easing.inOut(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [isRecording, recordIntensity]);
 
   const stopRecordingAsync = useCallback(async () => {
     const recording = recordingRef.current;
@@ -193,264 +264,198 @@ const ChatScreen = ({ navigation }) => {
       log("Configuring Audio mode for native recording…");
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
+        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
         playsInSilentModeIOS: true,
         shouldDuckAndroid: true,
+        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
         playThroughEarpieceAndroid: false,
         staysActiveInBackground: false,
       });
+      log("Preparing recorder…");
       const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await recording.startAsync();
       recordingRef.current = recording;
       setIsRecording(true);
-      setTranscript("");
       log("Native recording started");
     } catch (err) {
-      setError("Unable to access microphone. Please try again.");
       console.error("Failed to start recording", err);
-      log("Native recording failed to start", err);
+      setError("Recording failed to start. Try again.");
     }
   }, [permissionGranted]);
 
   const startWebRecordingAsync = useCallback(async () => {
-    if (permissionGranted === false) {
-      setError("Microphone access blocked in browser settings.");
-      log("Attempted to start web recording without permission");
-      return;
-    }
-
-    if (
-      !navigator?.mediaDevices?.getUserMedia ||
-      typeof window.MediaRecorder === "undefined"
-    ) {
-      setError(
-        "Browser does not support voice recording. Try the mobile app instead."
-      );
-      log("Web recording attempted without MediaRecorder support");
-      return;
-    }
-
-    setError(null);
     try {
-      log("Requesting browser audio stream…");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      webStreamRef.current = stream;
       const recorder = new MediaRecorder(stream);
-      const chunks = [];
-
+      webChunksRef.current = [];
       recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          chunks.push(event.data);
+        if (event.data.size > 0) {
+          webChunksRef.current.push(event.data);
         }
       };
-
-      recorder.start();
-      webChunksRef.current = chunks;
       mediaRecorderRef.current = recorder;
-      webStreamRef.current = stream;
+      recorder.start();
       setIsRecording(true);
-      setTranscript("");
-      log("Web recording started", { mimeType: recorder.mimeType });
+      log("Web recording started");
     } catch (err) {
       console.error("Failed to start web recording", err);
-      setError("Unable to access microphone. Check browser permissions.");
-      log("Web recording failed to start", err);
+      setError("Could not start recording. Check your device permissions.");
     }
-  }, [permissionGranted]);
+  }, []);
 
-  const handleTranscription = useCallback(async ({ uri, file }) => {
-    if (!uri && !file) {
-      setIsProcessing(false);
-      setIsRecording(false);
-      log("handleTranscription called with no recording payload");
-      return;
-    }
-    setIsProcessing(true);
-    log("Submitting recording for transcription", uri ? { uri } : { file });
-    log("Using conversation ID:", conversationIdRef.current);
-    let transcriptText = "";
-    try {
-      const response = await transcribeAudio({
-        uri,
-        file,
-        conversationId: conversationIdRef.current,
-      });
-      transcriptText = response?.transcript ?? "";
-      if (!transcriptText) {
-        setError("No speech detected. Try again.");
+  const handleTranscription = useCallback(
+    async ({ uri, file }) => {
+      if (!uri && !file) {
         setIsProcessing(false);
         setIsRecording(false);
-        log("Transcription returned empty text");
+        log("handleTranscription called with no recording payload");
         return;
       }
-      setTranscript(transcriptText);
-      log("Transcription succeeded", { transcript: transcriptText });
-      if (response?.context) {
-        console.log("[Voice] Server conversation context", response.context);
-      }
-      
-      // Add messages to conversation context
-      const residentMessage = {
-        id: `msg-${messages.length + 1}`,
-        sender: "Resident",
-        text: transcriptText,
-        timestamp: Date.now(),
-      };
-      const aiMessage = {
-        id: `msg-${messages.length + 2}`,
-        sender: "MoveMate",
-        text: response?.reply || "Thanks! We'll get back to you soon.",
-        timestamp: Date.now(),
-      };
-      const newMessages = [...messages, residentMessage, aiMessage];
-      updateConversationState({ messages: newMessages });
-      // Store ticket in Firebase ONLY if schema is complete (needs_more_info = false)
-      if (
-        response?.classification &&
-        !response.classification.needs_more_info &&
-        user
-      ) {
-        try {
-          const db = getFirebaseDatabase();
-          if (db) {
-            const ticketsRef = ref(db, "tickets");
-            await push(ticketsRef, {
-              ...response.classification,
-              transcript: transcriptText,
-              owner: user.uid,
-              createdAt: new Date().toISOString(),
-            });
-            log("Ticket pushed to Firebase DB (schema complete)");
-          }
-        } catch (dbErr) {
-          // non-fatal
-          log("Failed to push ticket to Firebase DB", dbErr);
+      setIsProcessing(true);
+      log("Submitting recording for transcription", uri ? { uri } : { file });
+      log("Using conversation ID:", conversationIdRef.current);
+      let transcriptText = "";
+      try {
+        const response = await transcribeAudio({
+          uri,
+          file,
+          conversationId: conversationIdRef.current,
+        });
+        transcriptText = response?.transcript ?? "";
+        if (!transcriptText) {
+          setError("No speech detected. Try again.");
+          setIsProcessing(false);
+          setIsRecording(false);
+          log("Transcription returned empty text");
+          return;
         }
-      } else if (response?.classification?.needs_more_info) {
-        log("Ticket NOT saved - more info needed from user");
-      }
+        setTranscript(transcriptText);
+        log("Transcription succeeded", { transcript: transcriptText });
+        if (response?.context) {
+          console.log("[Voice] Server conversation context", response.context);
+        }
 
-      // Play the TTS audio reply if the server returned it
-      const activeMessageId = aiMessage.id;
-      if (response?.audio?.data) {
-        setSpeakingMessageId(activeMessageId);
-        const contentType = response.audio.contentType || "audio/mpeg";
-        const base64 = response.audio.data;
-        try {
-          if (Platform.OS === "web") {
-            // Convert base64 to binary and play via browser Audio
-            log("Playing TTS audio on web");
-            const binary = atob(base64);
-            const len = binary.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-            const blob = new Blob([bytes], { type: contentType });
-            const audioUrl = URL.createObjectURL(blob);
-            const audioEl = new window.Audio(audioUrl);
-            try {
-              await audioEl.play();
-              log("TTS audio playback started");
-            } catch (playErr) {
-              console.warn("Audio playback failed (web):", playErr);
-              setError(
-                "Audio playback failed. Try again or check your browser."
-              );
-              log("TTS playback failed", playErr);
-            }
-            audioEl.onended = () => {
-              URL.revokeObjectURL(audioUrl);
-              log("TTS audio playback completed");
-              setSpeakingMessageId(null);
-            };
-            audioEl.onerror = () => {
-              setSpeakingMessageId(null);
-            };
-          } else {
-            // Native: use data URI for iOS/Android
-            log("Playing TTS audio on native");
-            
-            try {
-              // Set audio mode for playback
-              await Audio.setAudioModeAsync({
-                allowsRecordingIOS: false,
-                playsInSilentModeIOS: true,
-                staysActiveInBackground: false,
+        const residentMessage = {
+          id: `msg-${messages.length + 1}`,
+          sender: "Resident",
+          text: transcriptText,
+          timestamp: Date.now(),
+        };
+        const aiMessage = {
+          id: `msg-${messages.length + 2}`,
+          sender: "Resi",
+          text: response?.reply || "Thanks! We'll get back to you soon.",
+          timestamp: Date.now(),
+        };
+        const newMessages = [...messages, residentMessage, aiMessage];
+        updateConversationState({ messages: newMessages });
+
+        if (
+          response?.classification &&
+          !response.classification.needs_more_info &&
+          user
+        ) {
+          try {
+            const db = getFirebaseDatabase();
+            if (db) {
+              const ticketsRef = ref(db, "tickets");
+              await push(ticketsRef, {
+                ...response.classification,
+                transcript: transcriptText,
+                owner: user.uid,
+                createdAt: new Date().toISOString(),
               });
-              
-              // Create data URI from base64
-              const dataUri = `data:${contentType};base64,${base64}`;
-              log("Created data URI, length:", dataUri.length);
-              
-              const { sound } = await Audio.Sound.createAsync(
-                { uri: dataUri },
-                { shouldPlay: true },
-                (status) => {
-                  log("Playback status:", status);
-                  if (status.didJustFinish) {
-                    sound.unloadAsync().catch(e => log("Failed to unload sound:", e));
-                    setSpeakingMessageId(null);
-                  }
-                  if (status.error) {
-                    log("Playback error:", status.error);
-                    setSpeakingMessageId(null);
-                  }
-                }
-              );
-              log("TTS audio playback started on native");
-            } catch (nativePlayError) {
-              log("Native playback failed, trying file method:", nativePlayError);
-              
-              // Fallback: write to file
-              const filename = `movemate-reply-${Date.now()}.mp3`;
+              log("Ticket pushed to Firebase DB (schema complete)");
+            }
+          } catch (dbErr) {
+            log("Failed to push ticket to Firebase DB", dbErr);
+          }
+        } else if (response?.classification?.needs_more_info) {
+          log("Ticket NOT saved - more info needed from user");
+        }
+
+        const activeMessageId = aiMessage.id;
+        if (response?.audio?.data) {
+          setSpeakingMessageId(activeMessageId);
+          const contentType = response.audio.contentType || "audio/mpeg";
+          const base64 = response.audio.data;
+          try {
+            if (Platform.OS === "web") {
+              log("Playing TTS audio on web");
+              const binary = atob(base64);
+              const len = binary.length;
+              const bytes = new Uint8Array(len);
+              for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+              const blob = new Blob([bytes], { type: contentType });
+              const audioUrl = URL.createObjectURL(blob);
+              const audioEl = new window.Audio(audioUrl);
+              try {
+                await audioEl.play();
+                log("TTS audio playback started");
+              } catch (playErr) {
+                console.warn("Audio playback failed (web):", playErr);
+                setError("Audio playback failed. Try again or check your browser.");
+              }
+              audioEl.onended = () => {
+                URL.revokeObjectURL(audioUrl);
+                log("TTS audio playback completed");
+                setSpeakingMessageId(null);
+              };
+              audioEl.onerror = () => {
+                setSpeakingMessageId(null);
+              };
+            } else {
+              log("Playing TTS audio on native");
+              const filename = `resi-reply-${Date.now()}.mp3`;
               const fileUri = FileSystem.cacheDirectory + filename;
               await FileSystem.writeAsStringAsync(fileUri, base64, {
                 encoding: FileSystem.EncodingType.Base64,
               });
-              log("Wrote audio to file:", fileUri);
-              
               const { sound } = await Audio.Sound.createAsync(
                 { uri: fileUri },
                 { shouldPlay: true }
               );
-              log("TTS audio playback started from file");
               sound.setOnPlaybackStatusUpdate(async (status) => {
                 if (status?.didJustFinish) {
                   try {
                     await sound.unloadAsync();
+                  } catch (e) {}
+                  try {
                     await FileSystem.deleteAsync(fileUri, { idempotent: true });
                   } catch (e) {}
                   setSpeakingMessageId(null);
                 }
               });
             }
+          } catch (playbackError) {
+            console.warn("Failed to play audio response", playbackError);
+            setError("Audio playback failed. Try again or check your device.");
+            setSpeakingMessageId(null);
           }
-        } catch (playbackError) {
-          console.warn("Failed to play audio response", playbackError);
-          setError("Audio playback failed. Try again or check your device.");
-          log("TTS playback error", playbackError);
+        } else {
+          log("No audio data returned from backend");
           setSpeakingMessageId(null);
         }
-      } else {
-        log("No audio data returned from backend");
+      } catch (err) {
+        setError("Upload failed. Try again.");
+        console.error("Transcription failed", err);
         setSpeakingMessageId(null);
-      }
-    } catch (err) {
-      setError("Upload failed. Try again.");
-      console.error("Transcription failed", err);
-      log("Transcription request errored", err);
-    } finally {
-      setIsProcessing(false);
-      setIsRecording(false);
-      try {
-        if (uri && Platform.OS !== "web") {
-          await FileSystem.deleteAsync(uri, { idempotent: true });
+      } finally {
+        setIsProcessing(false);
+        setIsRecording(false);
+        try {
+          if (uri && Platform.OS !== "web") {
+            await FileSystem.deleteAsync(uri, { idempotent: true });
+          }
+        } catch (cleanupErr) {
+          log("Failed to delete temp recording", cleanupErr);
         }
-      } catch (cleanupErr) {
-        log("Failed to delete temp recording", cleanupErr);
       }
-    }
-  }, [user, messages, updateConversationState]);
+    },
+    [messages, updateConversationState, user]
+  );
 
   const handleMicPress = useCallback(async () => {
     log("Mic button pressed", {
@@ -458,6 +463,7 @@ const ChatScreen = ({ navigation }) => {
       isRecording,
       platform: Platform.OS,
     });
+
     if (isProcessing) {
       log("Ignoring mic press while processing");
       return;
@@ -472,7 +478,6 @@ const ChatScreen = ({ navigation }) => {
         } catch (err) {
           console.error("Failed to stop web recording", err);
           setError("Recording failed. Please try again.");
-          log("Web recording stop failed", err);
         }
       } else {
         await startWebRecordingAsync();
@@ -488,26 +493,22 @@ const ChatScreen = ({ navigation }) => {
       await startRecordingAsync();
     }
   }, [
+    handleTranscription,
     isProcessing,
     isRecording,
     startRecordingAsync,
     startWebRecordingAsync,
     stopRecordingAsync,
     stopWebRecordingAsync,
-    handleTranscription,
   ]);
 
   const handleLogout = async () => {
     log("Signing out user from ChatScreen");
     const newConversationId = `conv-${Date.now()}`;
     conversationIdRef.current = newConversationId;
-    updateConversationState({
-      messages: [],
-      conversationId: newConversationId,
-    }); // Clear messages and reset conversation ID on logout
+    updateConversationState({ messages: [], conversationId: newConversationId });
     setSpeakingMessageId(null);
     await logout();
-    // Reset navigation stack to RoleSelect screen
     navigation.dispatch(
       CommonActions.reset({
         index: 0,
@@ -520,11 +521,7 @@ const ChatScreen = ({ navigation }) => {
     log("User leaving chat, clearing messages and resetting conversation");
     const newConversationId = `conv-${Date.now()}`;
     conversationIdRef.current = newConversationId;
-    // Clear messages and reset conversation ID when user leaves chat
-    updateConversationState({
-      messages: [],
-      conversationId: newConversationId,
-    });
+    updateConversationState({ messages: [], conversationId: newConversationId });
     setSpeakingMessageId(null);
     navigation.goBack();
   };
@@ -546,7 +543,7 @@ const ChatScreen = ({ navigation }) => {
         >
           <Text style={styles.headerButtonText}>Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>MoveMate Voice</Text>
+        <Text style={styles.headerTitle}>Resi Voice</Text>
         <TouchableOpacity
           onPress={handleLogout}
           style={styles.headerButtonDark}
@@ -557,23 +554,22 @@ const ChatScreen = ({ navigation }) => {
       </View>
       <View style={styles.container}>
         <View style={styles.chatIntro}>
-          <Text style={styles.chatKicker}>Start a fresh report</Text>
+          <Text style={styles.chatKicker}>Start a voice report</Text>
           <Text style={styles.chatHeadline}>
-            Tell us what’s happening in your space
+            Speak naturally—Resi will triage it for you
           </Text>
           <Text style={styles.chatSubhead}>
-            When you speak, MoveMate transcribes, summarizes, and routes the
-            request to the right campus team instantly.
+            Tap record, describe the issue, and our assistant routes it to the
+            right campus team instantly.
           </Text>
         </View>
 
         <View style={styles.chatSurface}>
           {messages.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>You haven’t said anything yet</Text>
+              <Text style={styles.emptyTitle}>No messages yet</Text>
               <Text style={styles.emptyText}>
-                Tap the mic below and share what’s going on. We’ll take it from
-                there.
+                Tap the microphone below to start a voice report for your hall.
               </Text>
             </View>
           ) : (
@@ -586,28 +582,63 @@ const ChatScreen = ({ navigation }) => {
                   isSpeaking={item.id === speakingMessageId}
                 />
               )}
-              contentContainerStyle={styles.chatList}
+            contentContainerStyle={styles.chatList}
+            ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
               showsVerticalScrollIndicator={false}
             />
           )}
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity
-            testID="mic-button"
-            accessibilityLabel="Start voice recording"
-            style={[
-              styles.recordButton,
-              isRecording && styles.recordButtonActive,
-              isProcessing && { opacity: 0.7 },
-            ]}
-            onPress={handleMicPress}
-            disabled={isProcessing}
-          >
-            <Text style={styles.recordButtonText}>
-              {isRecording ? "Stop & Submit" : "Start Voice Report"}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.recordGlowWrapper}>
+            <TouchableOpacity
+              testID="mic-button"
+              accessibilityLabel="Start voice recording"
+              style={[
+                styles.recordButton,
+                isRecording && styles.recordButtonActive,
+                isProcessing && { opacity: 0.7 },
+              ]}
+              onPress={handleMicPress}
+              disabled={isProcessing}
+            >
+              <AnimatedLinearGradient
+                colors={buttonGradientColors}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                pointerEvents="none"
+                style={[
+                  styles.buttonGradient,
+                  {
+                    opacity: buttonGradientOpacity,
+                    transform: [
+                      {
+                        translateX: buttonGradientTranslate,
+                      },
+                    ],
+                  },
+                ]}
+              />
+              <Text style={styles.recordButtonText}>
+                {isRecording ? "Stop & Submit" : "Start Voice Report"}
+              </Text>
+            </TouchableOpacity>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.recordGlowHalo,
+                {
+                  opacity: haloOpacity,
+                  transform: [
+                    {
+                      scale: haloScale,
+                    },
+                  ],
+                },
+              ]}
+            >
+            </Animated.View>
+          </View>
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </View>
       </View>
@@ -624,27 +655,26 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -240,
     left: -160,
-    right: -140,
+    right: -160,
     height: 420,
-    opacity: 0.28,
+    opacity: 0.3,
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 28,
+    paddingHorizontal: 32,
     paddingTop: 20,
   },
   headerButton: {
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 18,
-    backgroundColor: "rgba(99,102,241,0.12)",
+    backgroundColor: "rgba(127,92,255,0.18)",
   },
   headerButtonText: {
-    color: colors.primaryDark,
+    color: colors.primary,
     fontWeight: "600",
-    letterSpacing: 0.4,
   },
   headerTitle: {
     fontSize: 16,
@@ -655,17 +685,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 18,
-    backgroundColor: "rgba(15,23,42,0.78)",
+    backgroundColor: "rgba(8,12,26,0.82)",
   },
   headerButtonDarkText: {
-    color: "#E2E8FE",
+    color: colors.text,
     fontWeight: "600",
   },
   container: {
     flex: 1,
-    paddingHorizontal: 28,
-    paddingTop: 24,
-    paddingBottom: 40,
+    paddingHorizontal: 32,
+    paddingTop: 32,
+    paddingBottom: 36,
     gap: 24,
   },
   chatIntro: {
@@ -674,7 +704,7 @@ const styles = StyleSheet.create({
   chatKicker: {
     fontSize: 13,
     fontWeight: "700",
-    color: colors.primaryDark,
+    color: colors.accent,
     letterSpacing: 1.4,
     textTransform: "uppercase",
   },
@@ -692,14 +722,14 @@ const styles = StyleSheet.create({
   chatSurface: {
     flex: 1,
     borderRadius: 28,
-    padding: 24,
-    backgroundColor: colors.card,
+    padding: 26,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "rgba(99,102,241,0.12)",
+    borderColor: "rgba(127,92,255,0.18)",
     ...shadows.card,
   },
   chatList: {
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
   emptyState: {
     flex: 1,
@@ -713,7 +743,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   emptyText: {
-    fontSize: 15,
+    fontSize: 14,
     color: colors.muted,
     textAlign: "center",
     maxWidth: 280,
@@ -722,21 +752,58 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  recordGlowWrapper: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   recordButton: {
-    borderRadius: 20,
-    paddingVertical: 18,
-    paddingHorizontal: 48,
-    backgroundColor: colors.primary,
+    position: "relative",
+    borderRadius: 999,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    backgroundColor: colors.primaryDark,
+    overflow: "hidden",
     ...shadows.card,
+    shadowColor: "rgba(18, 20, 40, 0.55)",
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.35,
+    shadowRadius: 26,
   },
   recordButtonActive: {
-    backgroundColor: colors.danger,
+    shadowColor: "rgba(124,58,237,0.6)",
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.45,
+    shadowRadius: 34,
+  },
+  recordGlowHalo: {
+    position: "absolute",
+    top: -6,
+    bottom: -6,
+    left: -12,
+    right: -12,
+    borderRadius: 999,
+    backgroundColor: "rgba(123, 97, 255, 0.18)",
+    shadowColor: "rgba(139,92,246,0.6)",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 28,
+  },
+  buttonGradient: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: "-50%",
+    width: "200%",
   },
   recordButtonText: {
-    color: "#fff",
+    color: "#F8FAFF",
     fontWeight: "700",
     fontSize: 16,
     letterSpacing: 0.3,
+    textShadowColor: "rgba(10,12,24,0.45)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
   errorText: {
     color: colors.danger,

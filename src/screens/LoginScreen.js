@@ -157,7 +157,7 @@ const LoginScreen = ({ navigation }) => {
       />
       <View style={styles.container}>
         <View style={styles.copyColumn}>
-          <Text style={styles.kicker}>MoveMate Access</Text>
+          <Text style={styles.kicker}>Resi Access</Text>
           <Text style={styles.title}>Sign in with your campus credentials</Text>
           <Text style={styles.subtitle}>
             Secure voice reporting for residents, plus real-time dashboards for
@@ -213,7 +213,7 @@ const LoginScreen = ({ navigation }) => {
             </Text>
           </TouchableOpacity>
           <Text style={styles.disclaimer}>
-            By continuing you agree to MoveMate’s community guidelines.
+            By continuing you agree to Resi’s community guidelines.
           </Text>
         </View>
       </View>
@@ -231,36 +231,36 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 32,
-    paddingVertical: 40,
-    gap: 32,
+    paddingHorizontal: 40,
+    paddingVertical: 48,
+    gap: 36,
     justifyContent: "center",
   },
   heroOverlay: {
     position: "absolute",
-    top: -220,
-    left: -140,
-    right: -120,
-    height: 420,
-    opacity: 0.35,
+    top: -260,
+    left: -160,
+    right: -160,
+    height: 480,
+    opacity: 0.32,
   },
   copyColumn: {
     maxWidth: 520,
-    gap: 16,
+    gap: 18,
   },
   kicker: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
-    color: colors.primaryDark,
-    letterSpacing: 1.6,
+    color: colors.accent,
+    letterSpacing: 1.8,
     textTransform: "uppercase",
   },
   title: {
-    fontSize: 40,
+    fontSize: 42,
     fontWeight: "800",
     color: colors.text,
-    lineHeight: 46,
-    letterSpacing: -0.8,
+    lineHeight: 48,
+    letterSpacing: -0.9,
   },
   subtitle: {
     fontSize: 16,
@@ -268,12 +268,12 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   panel: {
-    backgroundColor: colors.card,
-    borderRadius: 28,
-    padding: 28,
-    gap: 20,
+    backgroundColor: colors.surface,
+    borderRadius: 30,
+    padding: 32,
+    gap: 22,
     borderWidth: 1,
-    borderColor: "rgba(99,102,241,0.14)",
+    borderColor: colors.border,
     ...shadows.card,
     maxWidth: 440,
   },
@@ -288,15 +288,15 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   switchRole: {
-    color: colors.primaryDark,
+    color: colors.accent,
     fontWeight: "600",
   },
   input: {
     borderWidth: 1,
-    borderColor: "rgba(99,102,241,0.18)",
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    borderColor: "rgba(127,92,255,0.25)",
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     fontSize: 16,
     backgroundColor: colors.surfaceMuted,
     color: colors.text,
@@ -305,28 +305,29 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: colors.muted,
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
   loginButton: {
     backgroundColor: colors.primary,
-    borderRadius: 18,
-    paddingVertical: 16,
+    borderRadius: 20,
+    paddingVertical: 18,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 10,
   },
   loginButtonText: {
     color: "#fff",
     fontWeight: "700",
     fontSize: 16,
+    letterSpacing: 0.3,
   },
   disclaimer: {
-    marginTop: 4,
+    marginTop: 6,
     fontSize: 12,
-    color: "rgba(100,116,139,0.8)",
+    color: "rgba(199,206,232,0.65)",
     textAlign: "center",
   },
 });

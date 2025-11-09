@@ -1,34 +1,35 @@
 export const colors = {
-  background: "#F3F4FF",
-  surface: "#FFFFFF",
-  surfaceMuted: "#FAFBFF",
-  card: "#FFFFFF",
-  primary: "#6366F1",
-  primaryDark: "#4F46E5",
-  accent: "#14B8A6",
-  accentSoft: "#EEF2FF",
-  text: "#0F172A",
-  muted: "#64748B",
-  border: "#E2E8F0",
-  success: "#10B981",
-  warning: "#F59E0B",
-  danger: "#F97316",
-  glow: "#A855F7",
+  background: "#040816",
+  surface: "#0C1224",
+  surfaceMuted: "#111A30",
+  card: "#111C33",
+  primary: "#7F5CFF",
+  primaryDark: "#5032E2",
+  accent: "#3BC4F6",
+  accentSoft: "rgba(59,196,246,0.12)",
+  text: "#ECF0FF",
+  muted: "rgba(196,207,236,0.72)",
+  border: "rgba(113,132,191,0.26)",
+  success: "#43D9A3",
+  warning: "#F6C762",
+  danger: "#FF7A8A",
+  glow: "#8B5CF6",
 };
 
 export const gradients = {
-  hero: ["#6366F1", "#8B5CF6"],
-  surface: ["rgba(99,102,241,0.08)", "rgba(20,184,166,0.08)"],
-  pill: ["rgba(99,102,241,0.18)", "rgba(139,92,246,0.14)"],
+  hero: ["#111C33", "#2D1C89", "#040816"],
+  surface: ["rgba(127,92,255,0.22)", "rgba(59,196,246,0.15)"],
+  pill: ["rgba(127,92,255,0.32)", "rgba(59,196,246,0.24)"],
+  chatGlow: ["rgba(127,92,255,0.0)", "rgba(127,92,255,0.56)", "rgba(59,196,246,0.0)"],
 };
 
 export const shadows = {
   card: {
-    shadowColor: "#1F2937",
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 6,
+    shadowColor: "rgba(4,8,22,0.9)",
+    shadowOpacity: 0.44,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 16,
   },
 };
 

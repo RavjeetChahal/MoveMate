@@ -122,7 +122,7 @@ const normalizeIssue = (id, payload) => {
       payload.summary ||
       payload.transcript ||
       payload.notes ||
-      "Issue reported in MoveMate.",
+      "Issue reported via Resi.",
     location: payload.location || "Unknown location",
     urgency: normalizeUrgency(payload.urgency),
     status,

@@ -6,13 +6,14 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { colors, shadows } from "../theme/colors";
+import { LinearGradient } from "expo-linear-gradient";
+import { colors, gradients, shadows } from "../theme/colors";
 
 const urgencyColors = {
-  HIGH: colors.danger,
-  MEDIUM: colors.warning,
-  LOW: colors.success,
-  UNKNOWN: colors.warning,
+  HIGH: "#FF7A8A",
+  MEDIUM: "#F6C762",
+  LOW: "#43D9A3",
+  UNKNOWN: "#64748B",
 };
 
 const STATUS_OPTIONS = [
@@ -46,50 +47,50 @@ const formatTimestamp = (timestamp) => {
   }
 };
 
+const teamLabel = (team, category) => {
+  if (team === "maintenance") return "Maintenance";
+  if (team === "ra") return "Resident Life";
+  return category || "General";
+};
+
 export const IssueCard = ({ issue, position, onPress, onStatusChange }) => {
   const displayId = issue.displayId || issue.id;
   const statusValue = (issue.status || "open").toLowerCase();
   const urgency = issue.urgency || "UNKNOWN";
   const reportedAtLabel = formatTimestamp(issue.reportedAt);
   const showReported = Boolean(reportedAtLabel);
-  const team =
-    issue.team === "maintenance"
-      ? "Maintenance"
-      : issue.team === "ra"
-      ? "Resident Life"
-      : "General";
+  const teamText = teamLabel(issue.team, issue.category);
+
+  const metaItems = [
+    { label: "Location", value: issue.location },
+    { label: "Ticket", value: displayId },
+    showReported && { label: "Reported", value: reportedAtLabel },
+  ].filter(Boolean);
 
   return (
     <Pressable
       style={({ pressed }) => [styles.container, pressed && styles.pressed]}
       onPress={() => onPress?.(issue)}
     >
+      <LinearGradient
+        colors={["rgba(30,41,59,0.92)", "rgba(15,23,42,0.95)"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <View style={styles.header}>
         <View style={styles.identifier}>
           <Text style={styles.positionLabel}>
             {typeof position === "number" ? `#${position}` : displayId}
           </Text>
-          <View
-            style={[
-              styles.teamPill,
-              issue.team === "maintenance"
-                ? styles.teamMaintenance
-                : issue.team === "ra"
-                ? styles.teamResidentLife
-                : styles.teamGeneral,
-            ]}
-          >
-            <Text style={styles.teamText}>{team}</Text>
+          <View style={styles.teamPill}>
+            <Text style={styles.teamText}>{teamText}</Text>
           </View>
         </View>
         <View
           style={[
             styles.badge,
-            {
-              backgroundColor: `${
-                urgencyColors[urgency] ?? colors.warning
-              }22`,
-            },
+            { borderColor: `${urgencyColors[urgency] ?? colors.warning}40` },
           ]}
         >
           <Text
@@ -103,16 +104,35 @@ export const IssueCard = ({ issue, position, onPress, onStatusChange }) => {
         </View>
       </View>
 
-      <Text style={styles.summary}>{issue.summary}</Text>
+      <Text style={styles.summary} numberOfLines={2} ellipsizeMode="tail">
+        {issue.summary}
+      </Text>
 
-      <View style={styles.metaRow}>
-        <Text style={styles.metaLabel}>{issue.category}</Text>
-        <Text style={styles.metaText}>{issue.issueType}</Text>
+      <Text style={styles.issueType} numberOfLines={1} ellipsizeMode="tail">
+        {issue.issueType}
+      </Text>
+
+      <View style={styles.metaInlineRow}>
+        {metaItems.map((item, idx) => (
+          <View
+            key={item.label}
+            style={[
+              styles.metaInlineItem,
+              idx !== metaItems.length - 1 && styles.metaInlineDivider,
+            ]}
+          >
+            <Text style={styles.metaInlineLabel}>{item.label}</Text>
+            <Text
+              style={styles.metaInlineValue}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {item.value}
+            </Text>
+          </View>
+        ))}
       </View>
-      <View style={styles.metaRow}>
-        <Text style={styles.metaLabel}>Location</Text>
-        <Text style={styles.metaText}>{issue.location}</Text>
-      </View>
+
       <View style={styles.statusSection}>
         <Text style={styles.metaLabel}>Status</Text>
         <View style={styles.chipsRow}>
@@ -144,16 +164,6 @@ export const IssueCard = ({ issue, position, onPress, onStatusChange }) => {
           })}
         </View>
       </View>
-      <View style={styles.metaRow}>
-        <Text style={styles.metaLabel}>Ticket</Text>
-        <Text style={styles.metaText}>{displayId}</Text>
-      </View>
-      {showReported && (
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Reported</Text>
-          <Text style={styles.metaText}>{reportedAtLabel}</Text>
-        </View>
-      )}
     </Pressable>
   );
 };
@@ -162,10 +172,12 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.card,
     borderRadius: 22,
-    padding: 18,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
     gap: 12,
     borderWidth: 1,
-    borderColor: "rgba(99,102,241,0.12)",
+    borderColor: "rgba(71,85,105,0.35)",
+    overflow: "hidden",
     ...shadows.card,
   },
   pressed: {
@@ -180,88 +192,109 @@ const styles = StyleSheet.create({
   identifier: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 12,
   },
   positionLabel: {
     fontSize: 16,
     fontWeight: "700",
     color: colors.text,
+    letterSpacing: 0.4,
   },
   teamPill: {
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 4,
-  },
-  teamMaintenance: {
-    backgroundColor: "rgba(99,102,241,0.12)",
-  },
-  teamResidentLife: {
-    backgroundColor: "rgba(20,184,166,0.12)",
-  },
-  teamGeneral: {
-    backgroundColor: "rgba(148,163,184,0.16)",
+    backgroundColor: "rgba(59,196,246,0.14)",
   },
   teamText: {
     fontSize: 12,
     fontWeight: "600",
-    color: colors.text,
+    color: colors.accent,
   },
   badge: {
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    borderWidth: 1,
+    backgroundColor: "rgba(10, 15, 28, 0.55)",
   },
   badgeText: {
     fontSize: 12,
     fontWeight: "700",
   },
   summary: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "700",
     color: colors.text,
-    lineHeight: 24,
+    lineHeight: 22,
   },
-  metaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  metaLabel: {
+  issueType: {
     fontSize: 13,
     fontWeight: "600",
-    color: colors.muted,
+    color: colors.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
   },
-  metaText: {
-    fontSize: 15,
-    fontWeight: "500",
+  metaInlineRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  metaInlineItem: {
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  metaInlineDivider: {
+    paddingRight: 12,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: "rgba(148, 163, 184, 0.35)",
+  },
+  metaInlineLabel: {
+    fontSize: 12,
+    color: colors.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  metaInlineValue: {
+    fontSize: 13,
     color: colors.text,
+    fontWeight: "600",
+    maxWidth: 220,
   },
   statusSection: {
-    gap: 6,
-    marginTop: 8,
+    gap: 8,
+    marginTop: 6,
+  },
+  metaLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   chipsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 10,
   },
   statusChip: {
     borderRadius: 999,
     borderWidth: 0,
     backgroundColor: colors.surfaceMuted,
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingVertical: 6,
   },
   statusChipActive: {
-    backgroundColor: "rgba(99,102,241,0.18)",
+    backgroundColor: "rgba(127,92,255,0.24)",
   },
   statusChipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: colors.muted,
   },
   statusChipTextActive: {
-    color: colors.primaryDark,
+    color: colors.primary,
   },
 });

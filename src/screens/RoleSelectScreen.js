@@ -54,7 +54,7 @@ const RoleSelectScreen = ({ navigation }) => {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>Set your perspective</Text>
-          <Text style={styles.title}>How will you use MoveMate?</Text>
+          <Text style={styles.title}>How will you use Resi?</Text>
           <Text style={styles.subtitle}>
             Residents submit voice reports. Maintenance and RA teams triage and
             act instantly. Pick the workspace that matches you.
@@ -72,15 +72,6 @@ const RoleSelectScreen = ({ navigation }) => {
             />
           ))}
         </View>
-
-        <TouchableOpacity
-          style={styles.footerLink}
-          onPress={() => navigation.navigate("Login")}
-        >
-          <Text style={styles.footerText}>
-            Already selected a role? Continue to sign in
-          </Text>
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -97,9 +88,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 28,
-    paddingTop: 48,
-    paddingBottom: 32,
-    gap: 24,
+    paddingTop: 52,
+    paddingBottom: 52,
+    gap: 28,
+    justifyContent: "center",
   },
   heroOverlay: {
     position: "absolute",
@@ -132,17 +124,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   rolesGrid: {
-    flex: 1,
-    gap: 18,
-    marginTop: 16,
-  },
-  footerLink: {
-    alignSelf: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-  },
-  footerText: {
-    color: colors.primary,
-    fontWeight: "600",
+    gap: 16,
+    marginTop: 28,
   },
 });

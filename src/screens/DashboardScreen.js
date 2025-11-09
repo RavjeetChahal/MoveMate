@@ -147,27 +147,27 @@ const DashboardScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       <LinearGradient
         colors={gradients.hero}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.heroBackground}
+        style={styles.heroOverlay}
       />
       <View style={styles.container}>
         <View style={styles.topBar}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>Team Ops</Text>
+            <Text style={styles.eyebrow}>Resi Command</Text>
             <Text style={styles.title}>
               {role === "maintenance"
-                ? "Maintenance Command Center"
+                ? "Maintenance Operations"
                 : role === "ra"
-                ? "Resident Life Command Center"
+                ? "Resident Life Operations"
                 : "Live Issue Queue"}
             </Text>
             <Text style={styles.subtitle}>
-              Track the requests that matter most. Prioritised by urgency and
-              freshness so your team can respond in record time.
+              Monitor the requests that matter most. Prioritized by urgency and
+              freshness so your team can respond instantly.
             </Text>
           </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
@@ -177,7 +177,7 @@ const DashboardScreen = ({ navigation }) => {
 
         <View style={styles.metricsRow}>
           <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Open Tickets</Text>
+            <Text style={styles.metricLabel}>Open tickets</Text>
             <Text style={styles.metricValue}>
               {sortedIssues.filter((issue) => issue.status !== "closed").length}
             </Text>
@@ -186,7 +186,7 @@ const DashboardScreen = ({ navigation }) => {
             </Text>
           </View>
           <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Team Focus</Text>
+            <Text style={styles.metricLabel}>Queue focus</Text>
             <Text style={styles.metricValue}>
               {role === "maintenance"
                 ? "Maintenance"
@@ -208,17 +208,11 @@ const DashboardScreen = ({ navigation }) => {
               return (
                 <TouchableOpacity
                   key={level}
-                  style={[
-                    styles.filterChip,
-                    isActive && styles.filterChipActive,
-                  ]}
+                  style={[styles.filterChip, isActive && styles.filterChipActive]}
                   onPress={() => setFilterUrgency(level)}
                 >
                   <Text
-                    style={[
-                      styles.filterText,
-                      isActive && styles.filterTextActive,
-                    ]}
+                    style={[styles.filterText, isActive && styles.filterTextActive]}
                   >
                     {level}
                   </Text>
@@ -231,7 +225,6 @@ const DashboardScreen = ({ navigation }) => {
         <FlatList
           data={filteredIssues}
           keyExtractor={(item) => item.id}
-          style={styles.list}
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
           renderItem={({ item, index }) => (
@@ -254,65 +247,63 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.background,
-    minHeight: 0,
   },
-  heroBackground: {
+  heroOverlay: {
     position: "absolute",
-    top: -180,
-    left: -120,
-    right: -120,
-    height: 360,
-    opacity: 0.35,
+    top: -260,
+    left: -180,
+    right: -180,
+    height: 520,
+    opacity: 0.28,
   },
   container: {
     flex: 1,
-    minHeight: 0,
     paddingHorizontal: 28,
-    paddingTop: 32,
-    paddingBottom: 32,
-    gap: 24,
+    paddingTop: 28,
+    paddingBottom: 24,
+    gap: 20,
+  },
+  topBar: {
+    position: "relative",
+    borderRadius: 26,
+    padding: 22,
+    backgroundColor: "rgba(8, 12, 26, 0.85)",
+    overflow: "hidden",
   },
   eyebrow: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
-    color: "#E0E7FF",
+    color: colors.accent,
     letterSpacing: 1.6,
     textTransform: "uppercase",
   },
   title: {
     fontSize: 28,
     fontWeight: "800",
-    color: colors.surface,
+    color: colors.text,
     marginTop: 6,
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
   subtitle: {
     fontSize: 14,
-    color: "rgba(241, 245, 255, 0.82)",
+    color: "rgba(221,227,250,0.78)",
     marginTop: 10,
     maxWidth: 520,
-    lineHeight: 21,
+    lineHeight: 22,
   },
   logoutButton: {
     position: "absolute",
-    right: 0,
-    top: 0,
+    right: 20,
+    top: 18,
     paddingVertical: 8,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     borderRadius: 999,
-    backgroundColor: "rgba(15, 23, 42, 0.7)",
+    backgroundColor: "rgba(15,23,42,0.78)",
   },
   logoutText: {
     fontSize: 13,
-    color: colors.surface,
+    color: colors.text,
     fontWeight: "600",
-  },
-  topBar: {
-    position: "relative",
-    borderRadius: 28,
-    padding: 26,
-    backgroundColor: "rgba(15, 23, 42, 0.85)",
-    overflow: "hidden",
   },
   metricsRow: {
     flexDirection: "row",
@@ -326,25 +317,41 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: "rgba(99,102,241,0.18)",
+    borderColor: "rgba(127,92,255,0.18)",
     ...shadows.card,
   },
   metricLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: colors.muted,
     textTransform: "uppercase",
-    letterSpacing: 1.1,
+    letterSpacing: 1.2,
   },
   metricValue: {
-    marginTop: 12,
+    marginTop: 10,
     fontSize: 26,
     fontWeight: "800",
-    color: colors.primaryDark,
+    color: colors.text,
   },
   metricHint: {
-    marginTop: 8,
+    marginTop: 6,
     color: colors.muted,
+    fontSize: 12,
+  },
+  filtersCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: "rgba(127,92,255,0.18)",
+    ...shadows.card,
+  },
+  filtersLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: 12,
   },
   filters: {
     flexDirection: "row",
@@ -353,45 +360,24 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: "transparent",
-    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: 0,
+    backgroundColor: colors.surfaceMuted,
   },
   filterChipActive: {
-    borderWidth: 0,
-    backgroundColor: "rgba(99,102,241,0.12)",
+    backgroundColor: "rgba(127,92,255,0.24)",
   },
   filterText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: colors.muted,
   },
   filterTextActive: {
-    color: colors.primaryDark,
-  },
-  filtersCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 24,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: "rgba(99,102,241,0.1)",
-    ...shadows.card,
-  },
-  filtersLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 12,
+    color: colors.primary,
   },
   listContent: {
-    paddingBottom: 64,
-    paddingTop: 8,
-  },
-  list: {
-    flex: 1,
-    minHeight: 0,
+    paddingBottom: 72,
+    paddingTop: 6,
   },
 });
