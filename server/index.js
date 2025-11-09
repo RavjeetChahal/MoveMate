@@ -105,6 +105,8 @@ Urgency rules:
 - LOW: cosmetic damage, general questions, mild discomfort, information requests.
 
 If any required field is missing or incomplete, set needs_more_info to true and ask for the specific missing details in the reply.
+
+When ALL required fields (category, issue_type, location, urgency, summary) are complete and needs_more_info is false, give a warm goodbye in the reply thanking the user for reporting the issue and letting them know the ticket has been created and the appropriate team will be notified. Make it friendly and reassuring.
 `;
 
   const completion = await client.chat.completions.create({
@@ -221,18 +223,33 @@ app.post("/api/processInput", (req, res) => {
       let ticketRecord = null;
 
       try {
-        classification = await classifyTranscript({ transcript });
-        ticketRecord = await persistTicket({
+        classification = await classifyTranscript({
           transcript,
-          category: classification.category,
-          issue_type: classification.issue_type,
-          location: classification.location,
-          urgency: classification.urgency,
-          summary: classification.summary,
+          conversationId: fields.conversationId?.[0] || `conv-${Date.now()}`,
         });
         console.log("[server] Classification complete", classification);
-        if (ticketRecord) {
-          console.log("[server] Ticket persisted", ticketRecord.id);
+
+        // Only persist ticket if schema is complete (needs_more_info = false)
+        if (classification && !classification.needs_more_info) {
+          ticketRecord = await persistTicket({
+            transcript,
+            category: classification.category,
+            issue_type: classification.issue_type,
+            location: classification.location,
+            urgency: classification.urgency,
+            summary: classification.summary,
+          });
+          if (ticketRecord) {
+            console.log(
+              "[server] Ticket persisted (schema complete)",
+              ticketRecord.id
+            );
+          }
+        } else {
+          console.log(
+            "[server] Ticket NOT persisted - more info needed",
+            classification
+          );
         }
       } catch (classificationError) {
         console.warn(
@@ -296,6 +313,11 @@ app.post("/api/processInput", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
+  console.log("[server] /health check", {
+    origin: req.headers.origin,
+    ip: req.ip,
+    ua: req.headers["user-agent"],
+  });
   res.json({ status: "ok" });
 });
 app.listen(port, () => {

@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { CommonActions } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
@@ -42,7 +43,7 @@ const HomeScreen = ({ navigation }) => {
   const mediaRecorderRef = useRef(null);
   const webStreamRef = useRef(null);
   const webChunksRef = useRef([]);
-  const { resetRole, user } = useAuth();
+  const { logout, user } = useAuth();
   const { conversationState, updateConversationState } = useConversation();
   const conversationIdRef = useRef(
     conversationState.conversationId || `conv-${Date.now()}`
@@ -508,11 +509,18 @@ const HomeScreen = ({ navigation }) => {
     stopWebRecordingAsync,
   ]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     log("Signing out user");
     conversationIdRef.current = `conv-${Date.now()}`;
     updateConversationState({});
-    resetRole();
+    await logout();
+    // Reset navigation stack to RoleSelect screen
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: "RoleSelect" }],
+      })
+    );
   };
 
   return (

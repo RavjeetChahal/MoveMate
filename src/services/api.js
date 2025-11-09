@@ -8,7 +8,10 @@ const DEFAULT_API_URL = Platform.select({
   default: "http://localhost:3000",
 });
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_API_URL;
+// Remove trailing slash to prevent double-slash in URLs
+const API_BASE_URL = (
+  process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_API_URL
+).replace(/\/$/, "");
 
 if (!process.env.EXPO_PUBLIC_API_BASE_URL) {
   console.warn(
@@ -21,6 +24,8 @@ if (API_BASE_URL.includes("your-vercel-project")) {
     `[API] Detected placeholder API URL (${API_BASE_URL}). Update EXPO_PUBLIC_API_BASE_URL to point to your running backend.`
   );
 }
+
+console.log("[API] Base URL resolved:", API_BASE_URL);
 
 export const transcribeAudio = async ({
   uri,
@@ -88,7 +93,9 @@ export const pingServer = async (timeout = 3000) => {
 
     // Do not set the Origin header manually — browsers block this. The browser
     // will set Origin automatically on cross-origin requests.
-    const resp = await axios.get(`${API_BASE_URL}/health`, {
+    const url = `${API_BASE_URL}/health`;
+    console.log("[API] Pinging backend health:", url);
+    const resp = await axios.get(url, {
       headers: { Accept: "application/json" },
       signal,
     });
@@ -96,6 +103,11 @@ export const pingServer = async (timeout = 3000) => {
   } catch (err) {
     // normalize error
     const error = err?.response ? err.response : err;
+    console.warn("[API] Health check failed", {
+      message: error?.statusText || error?.message,
+      status: error?.status,
+      url: `${API_BASE_URL}/health`,
+    });
     throw error;
   }
 };

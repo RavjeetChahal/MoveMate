@@ -19,6 +19,12 @@ export const ConversationProvider = ({ children }) => {
   const [conversationState, setConversationState] = useState({});
 
   const updateConversationState = useCallback((newData) => {
+    try {
+      // Safe, shallow log to avoid noisy output
+      console.log("[Conversation] updateConversationState", {
+        incomingKeys: Object.keys(newData || {}),
+      });
+    } catch {}
     setConversationState((prevState) => ({
       ...prevState,
       ...newData,
@@ -27,6 +33,7 @@ export const ConversationProvider = ({ children }) => {
   }, []);
 
   const clearConversationState = useCallback(() => {
+    console.log("[Conversation] clearConversationState");
     setConversationState({});
   }, []);
 
