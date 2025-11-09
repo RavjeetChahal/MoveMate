@@ -460,8 +460,12 @@ const ChatScreen = ({ navigation }) => {
 
   const handleLogout = async () => {
     log("Signing out user from ChatScreen");
-    conversationIdRef.current = `conv-${Date.now()}`;
-    updateConversationState({ messages: [] }); // Clear messages on logout
+    const newConversationId = `conv-${Date.now()}`;
+    conversationIdRef.current = newConversationId;
+    updateConversationState({ 
+      messages: [], 
+      conversationId: newConversationId 
+    }); // Clear messages and reset conversation ID on logout
     await logout();
     // Reset navigation stack to RoleSelect screen
     navigation.dispatch(
@@ -473,9 +477,14 @@ const ChatScreen = ({ navigation }) => {
   };
 
   const handleBackPress = () => {
-    log("User leaving chat, clearing messages");
-    // Clear messages when user leaves chat
-    updateConversationState({ messages: [] });
+    log("User leaving chat, clearing messages and resetting conversation");
+    const newConversationId = `conv-${Date.now()}`;
+    conversationIdRef.current = newConversationId;
+    // Clear messages and reset conversation ID when user leaves chat
+    updateConversationState({ 
+      messages: [], 
+      conversationId: newConversationId 
+    });
     navigation.goBack();
   };
 

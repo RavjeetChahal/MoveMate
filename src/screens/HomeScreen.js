@@ -580,8 +580,9 @@ const HomeScreen = ({ navigation }) => {
 
   const handleLogout = async () => {
     log("Signing out user");
-    conversationIdRef.current = `conv-${Date.now()}`;
-    updateConversationState({});
+    const newConversationId = `conv-${Date.now()}`;
+    conversationIdRef.current = newConversationId;
+    updateConversationState({ conversationId: newConversationId });
     await logout();
     // Reset navigation stack to RoleSelect screen
     navigation.dispatch(
