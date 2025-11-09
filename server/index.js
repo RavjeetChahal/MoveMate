@@ -252,22 +252,127 @@ When ALL required fields (category, issue_type, location, urgency, summary) are 
 };
 
 const persistTicket = async (payload) => {
+  console.log("[server] ===== persistTicket CALLED =====");
+  console.log("[server] Payload:", {
+    category: payload.category,
+    issue_type: payload.issue_type,
+  });
+
   const firebase = initFirebase();
   if (!firebase) {
+    console.log("[server] ERROR: Firebase not initialized!");
     return null;
   }
 
   const db = firebase.database();
+  const team = determineTicketTeam(payload);
+  console.log("[server] Team determined:", team);
+
+  // Calculate queue position: count existing open tickets for this team
+  console.log("[server] Counting existing tickets for team:", team);
+  const ticketsSnapshot = await db.ref("tickets").once("value");
+  const allTickets = ticketsSnapshot.val() || {};
+  const openTicketsForTeam = Object.values(allTickets).filter(
+    (t) =>
+      t.team === team && (t.status === "open" || t.status === "in_progress")
+  );
+  const queuePosition = openTicketsForTeam.length + 1;
+
+  console.log("[server] Assigning queue position:", {
+    team,
+    openTicketsCount: openTicketsForTeam.length,
+    newQueuePosition: queuePosition,
+  });
+
   const ref = db.ref("tickets").push();
   const ticket = {
     ...payload,
-    team: determineTicketTeam(payload),
+    team,
     status: "open",
+    queuePosition,
     timestamp: new Date().toISOString(),
   };
+  console.log("[server] Saving ticket with queuePosition:", queuePosition);
   await ref.set(ticket);
+  console.log("[server] Ticket saved! ID:", ref.key);
   return { id: ref.key, ...ticket };
 };
+
+// One-time migration: Assign queue positions to tickets that don't have them
+const backfillQueuePositions = async () => {
+  const firebase = initFirebase();
+  if (!firebase) {
+    console.log("[server] Firebase not available, skipping queue backfill");
+    return;
+  }
+
+  console.log("[server] Starting queue position backfill...");
+  const db = firebase.database();
+  const ticketsSnapshot = await db.ref("tickets").once("value");
+  const allTickets = ticketsSnapshot.val() || {};
+
+  // Group tickets by team and count positions
+  const teamQueues = { maintenance: [], ra: [] };
+
+  Object.entries(allTickets).forEach(([id, ticket]) => {
+    if (
+      (ticket.status === "open" || ticket.status === "in_progress") &&
+      ticket.team
+    ) {
+      teamQueues[ticket.team] = teamQueues[ticket.team] || [];
+      teamQueues[ticket.team].push({ id, ticket });
+    }
+  });
+
+  // Sort each team's queue by timestamp and assign positions
+  const updates = {};
+  for (const [team, tickets] of Object.entries(teamQueues)) {
+    if (!tickets.length) continue;
+
+    // Sort by timestamp
+    tickets.sort((a, b) => {
+      const timeA = new Date(a.ticket.timestamp || 0).getTime();
+      const timeB = new Date(b.ticket.timestamp || 0).getTime();
+      return timeA - timeB;
+    });
+
+    // Assign queue positions
+    tickets.forEach((item, index) => {
+      const expectedPosition = index + 1;
+      if (item.ticket.queuePosition !== expectedPosition) {
+        updates[`tickets/${item.id}/queuePosition`] = expectedPosition;
+        console.log(
+          `[server] Backfilling queue position: ${item.id} → ${expectedPosition} (${team})`
+        );
+      }
+    });
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await db.ref().update(updates);
+    console.log(
+      `[server] Queue backfill complete: ${
+        Object.keys(updates).length
+      } tickets updated`
+    );
+  } else {
+    console.log("[server] Queue backfill: no updates needed");
+  }
+};
+
+// Run backfill on server start
+setTimeout(() => {
+  backfillQueuePositions().catch((err) => {
+    console.error("[server] Queue backfill failed:", err);
+  });
+}, 2000); // Wait 2 seconds for Firebase to initialize
+
+// Auto-sync queue positions every 5 seconds
+setInterval(() => {
+  backfillQueuePositions().catch((err) => {
+    console.error("[server] Auto queue sync failed:", err);
+  });
+}, 5000); // Run every 5 seconds
 
 const uploadDir = path.join(__dirname, "..", ".tmp");
 fs.mkdirSync(uploadDir, { recursive: true });

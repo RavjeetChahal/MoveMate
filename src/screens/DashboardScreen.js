@@ -24,10 +24,12 @@ const urgencyOrder = ["HIGH", "MEDIUM", "LOW", "UNKNOWN"];
 const CLOSED_HIDE_DELAY_MS = 7000;
 
 const DashboardScreen = ({ navigation }) => {
+  console.log("[Dashboard] Component mounted/rendered");
   const [filterUrgency, setFilterUrgency] = useState("ALL");
   const [nowTick, setNowTick] = useState(Date.now());
   const { logout, role } = useAuth();
   const issuesData = useIssues();
+  console.log("[Dashboard] issuesData loaded, count:", issuesData.length);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -92,15 +94,29 @@ const DashboardScreen = ({ navigation }) => {
   }, [filterUrgency, issuesForRole, nowTick]);
 
   useEffect(() => {
+    console.log("[Dashboard] sortedIssues changed, count:", sortedIssues.length);
     if (!sortedIssues.length) {
+      console.log("[Dashboard] No issues to sync");
       return;
     }
 
     const syncPositions = async () => {
       const updates = [];
+      console.log("[Dashboard] Checking queue positions for", sortedIssues.length, "issues");
       sortedIssues.forEach((issue, index) => {
         const expectedPosition = index + 1;
+        console.log("[Dashboard] Issue queue check:", {
+          id: issue.id.substring(0, 10),
+          currentQueue: issue.queuePosition,
+          expectedQueue: expectedPosition,
+          match: issue.queuePosition === expectedPosition,
+        });
         if (issue.queuePosition !== expectedPosition) {
+          console.log("[Dashboard] Queue position mismatch - will update:", {
+            id: issue.id,
+            current: issue.queuePosition,
+            expected: expectedPosition,
+          });
           updates.push(
             updateIssueQueuePosition(issue.id, expectedPosition).catch(
               (error) => {
@@ -115,7 +131,11 @@ const DashboardScreen = ({ navigation }) => {
         }
       });
       if (updates.length) {
+        console.log("[Dashboard] Syncing", updates.length, "queue positions");
         await Promise.all(updates);
+        console.log("[Dashboard] Queue sync complete");
+      } else {
+        console.log("[Dashboard] All queue positions already in sync");
       }
     };
 

@@ -102,6 +102,15 @@ const determineIssueTeam = (payload = {}) => {
 const normalizeIssue = (id, payload) => {
   if (!id || !payload) return null;
 
+  // Debug logging
+  console.log("[issueService] normalizeIssue raw payload:", {
+    id,
+    payload,
+    hasCategory: !!payload.category,
+    hasIssueType: !!payload.issue_type,
+    hasTeam: !!payload.team,
+  });
+
   const status = normalizeStatus(payload.status);
   const closedAtRaw = payload.closedAt || payload.closed_at || null;
   const closedAt = parseDateValue(closedAtRaw);
@@ -143,9 +152,13 @@ const fromArray = (items = []) =>
 
 const fromSnapshot = (snapshot) => {
   const value = snapshot?.val();
+  console.log("[issueService] fromSnapshot raw value:", value);
   if (!value) return [];
   return Object.entries(value)
-    .map(([key, data]) => normalizeIssue(key, data))
+    .map(([key, data]) => {
+      console.log("[issueService] Processing ticket:", { key, data });
+      return normalizeIssue(key, data);
+    })
     .filter(Boolean);
 };
 
@@ -167,6 +180,7 @@ export const fetchIssues = async () => {
 
 export const subscribeToIssues = (callback) => {
   const db = getFirebaseDatabase();
+  console.log("[Issues] subscribeToIssues called, db:", !!db);
   if (!db) {
     console.warn(
       "[Issues] Firebase not configured. Using mock issues as fallback."
@@ -175,10 +189,14 @@ export const subscribeToIssues = (callback) => {
     return () => {};
   }
 
+  console.log("[Issues] Setting up Firebase listener on tickets path");
   const unsubscribe = onValue(
     ref(db, "tickets"),
     (snapshot) => {
-      callback(fromSnapshot(snapshot));
+      console.log("[Issues] Firebase snapshot received, exists:", snapshot.exists());
+      const tickets = fromSnapshot(snapshot);
+      console.log("[Issues] Processed tickets count:", tickets.length);
+      callback(tickets);
     },
     (error) => {
       console.error("[Issues] Failed to subscribe to tickets:", error);
@@ -216,6 +234,7 @@ export const updateIssueStatus = async (issueId, nextStatus) => {
 };
 
 export const updateIssueQueuePosition = async (issueId, position) => {
+  console.log("[issueService] Updating queue position:", { issueId, position });
   const db = getFirebaseDatabase();
   if (!db) {
     throw new Error("Firebase database is not configured.");
@@ -224,4 +243,5 @@ export const updateIssueQueuePosition = async (issueId, position) => {
     queuePosition: position,
     updatedAt: new Date().toISOString(),
   });
+  console.log("[issueService] Queue position updated successfully");
 };
