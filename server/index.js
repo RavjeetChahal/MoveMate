@@ -29,6 +29,11 @@ const allowedOrigins = (
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+// Serve static files from Expo web build
+// Expo SDK 54+ outputs to 'dist' directory when using Metro bundler
+const webBuildPath = path.join(__dirname, "..", "dist");
+app.use(express.static(webBuildPath));
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -313,6 +318,12 @@ app.post("/api/processInput", (req, res) => {
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
+
+// Serve index.html for all non-API routes (SPA fallback)
+app.get("*", (req, res) => {
+  res.sendFile(path.join(webBuildPath, "index.html"));
+});
+
 app.listen(port, host, () => {
   console.log(`MoveMate server listening on http://${host}:${port}`);
 });

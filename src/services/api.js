@@ -5,6 +5,11 @@ import Constants from "expo-constants";
 const DEFAULT_API_URL = Platform.select({
   ios: "http://localhost:3000",
   android: "http://10.0.2.2:3000",
+  web: typeof window !== "undefined" && window.location.origin.includes("localhost")
+    ? "http://localhost:3000"
+    : typeof window !== "undefined" 
+    ? window.location.origin 
+    : "http://localhost:3000",
   default: "http://localhost:3000",
 });
 
