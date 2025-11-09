@@ -19,8 +19,6 @@ import { transcribeAudio } from "../services/api";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, gradients, shadows } from "../theme/colors";
 import { ChatBubble } from "../components/ChatBubble";
-import { getFirebaseDatabase } from "../services/firebase";
-import { ref, push } from "firebase/database";
 
 const ChatScreen = ({ navigation }) => {
   const { conversationState, updateConversationState } = useConversation();
@@ -350,28 +348,12 @@ const ChatScreen = ({ navigation }) => {
         const newMessages = [...messages, residentMessage, aiMessage];
         updateConversationState({ messages: newMessages });
 
-        if (
-          response?.classification &&
-          !response.classification.needs_more_info &&
-          user
-        ) {
-          try {
-            const db = getFirebaseDatabase();
-            if (db) {
-              const ticketsRef = ref(db, "tickets");
-              await push(ticketsRef, {
-                ...response.classification,
-                transcript: transcriptText,
-                owner: user.uid,
-                createdAt: new Date().toISOString(),
-              });
-              log("Ticket pushed to Firebase DB (schema complete)");
-            }
-          } catch (dbErr) {
-            log("Failed to push ticket to Firebase DB", dbErr);
-          }
-        } else if (response?.classification?.needs_more_info) {
+        // Server handles ticket creation via persistTicket() in server/index.js
+        // No need to create tickets on the frontend
+        if (response?.classification?.needs_more_info) {
           log("Ticket NOT saved - more info needed from user");
+        } else if (response?.ticket) {
+          log("Ticket created by server:", response.ticket.id);
         }
 
         const activeMessageId = aiMessage.id;
