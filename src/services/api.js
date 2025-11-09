@@ -13,9 +13,32 @@ const getDefaultApiUrl = () => {
   if (USE_LOCAL_SERVER) {
     // Local development mode
     if (Platform.OS === 'ios') {
+      // For physical iOS devices, use the Expo debugger host IP
+      // For simulator, use localhost
+      const debuggerHost = Constants.expoConfig?.hostUri?.split(':').shift();
+      console.log('[API] iOS debuggerHost detected:', debuggerHost);
+      console.log('[API] Constants.expoConfig?.hostUri:', Constants.expoConfig?.hostUri);
+      console.log('[API] Constants.manifest?.debuggerHost:', Constants.manifest?.debuggerHost);
+      
+      if (debuggerHost && debuggerHost !== 'localhost') {
+        // Physical device - use the Mac's IP address
+        const url = `http://${debuggerHost}:3000`;
+        console.log('[API] Using physical device URL:', url);
+        return url;
+      }
+      // Simulator - use localhost
+      console.log('[API] Using simulator URL: http://localhost:3000');
       return "http://localhost:3000";
     }
     if (Platform.OS === 'android') {
+      // Android emulator uses 10.0.2.2 to reach host machine
+      const debuggerHost = Constants.expoConfig?.hostUri?.split(':').shift();
+      console.log('[API] Android debuggerHost detected:', debuggerHost);
+      
+      if (debuggerHost && debuggerHost !== 'localhost' && debuggerHost !== '10.0.2.2') {
+        // Physical device - use the actual IP
+        return `http://${debuggerHost}:3000`;
+      }
       return "http://10.0.2.2:3000";
     }
   } else {
@@ -41,10 +64,23 @@ const getDefaultApiUrl = () => {
 
 const DEFAULT_API_URL = getDefaultApiUrl();
 
+// Determine final API URL
+// If EXPO_PUBLIC_API_BASE_URL points to localhost and we're on a physical device,
+// ignore it and use the auto-detected IP instead
+let API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_API_URL;
+
+if (API_BASE_URL.includes('localhost') && (Platform.OS === 'ios' || Platform.OS === 'android')) {
+  const debuggerHost = Constants.expoConfig?.hostUri?.split(':').shift();
+  if (debuggerHost && debuggerHost !== 'localhost') {
+    // Physical device detected - use auto-detected IP instead of localhost
+    console.log('[API] EXPO_PUBLIC_API_BASE_URL points to localhost. Physical devices cannot reach this address.');
+    console.log('[API] Using auto-detected device URL instead:', DEFAULT_API_URL);
+    API_BASE_URL = DEFAULT_API_URL;
+  }
+}
+
 // Remove trailing slash to prevent double-slash in URLs
-const API_BASE_URL = (
-  process.env.EXPO_PUBLIC_API_BASE_URL || DEFAULT_API_URL
-).replace(/\/$/, "");
+API_BASE_URL = API_BASE_URL.replace(/\/$/, "");
 
 if (!process.env.EXPO_PUBLIC_API_BASE_URL) {
   console.warn(
