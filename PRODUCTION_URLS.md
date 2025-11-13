@@ -7,6 +7,7 @@ After deploying to Render, update these URLs:
 ### 1. Find Your Render URL
 
 Check your Render dashboard for your web service URL. It will be something like:
+
 ```
 https://your-app-name.onrender.com
 ```
@@ -51,16 +52,19 @@ CORS_ALLOW_ORIGINS=https://your-app-name.onrender.com
 If your Render URL is different from `resi-7125.onrender.com`, update:
 
 **Option A: Update `src/services/api.js`** (line 8):
+
 ```javascript
 const PRODUCTION_API = "https://your-app-name.onrender.com";
 ```
 
 **Option B: Set environment variable** (if using Expo Config Plugin):
+
 ```bash
 EXPO_PUBLIC_API_BASE_URL=https://your-app-name.onrender.com
 ```
 
 **Option C: Update `app.json`**:
+
 ```json
 {
   "expo": {
@@ -76,40 +80,49 @@ EXPO_PUBLIC_API_BASE_URL=https://your-app-name.onrender.com
 ## Testing Your URLs
 
 ### 1. Test Server Health
+
 ```bash
 curl https://your-app-name.onrender.com/health
 ```
+
 Should return: `{"status":"ok","timestamp":"..."}`
 
 ### 2. Test Webhook Endpoint
+
 ```bash
 curl -X POST https://your-app-name.onrender.com/api/vapi/webhook \
   -H "Content-Type: application/json" \
   -d '{"message":{"type":"status-update","call":{"id":"test","status":"started"}}}'
 ```
+
 Should return: `{"received":true}`
 
 ### 3. Test Vapi Call Creation
+
 ```bash
 curl -X POST https://your-app-name.onrender.com/api/vapi/create-call \
   -H "Content-Type: application/json" \
   -d '{"assistantId":"your_assistant_id","userId":"test","conversationId":"test"}'
 ```
+
 Should return: `{"callId":"...","transportUrl":"...","listenUrl":"..."}`
 
 ## Common Issues
 
 ### Webhook Not Receiving Events
+
 - ✅ Check Render logs for incoming POST requests
 - ✅ Verify webhook URL in Vapi dashboard (must be HTTPS)
 - ✅ Make sure `VAPI_WEBHOOK_URL` is set in Render environment variables
 
 ### Frontend Can't Connect
+
 - ✅ Check if Render URL is correct in `src/services/api.js`
 - ✅ For web, check browser console for CORS errors
 - ✅ Verify Render service is running
 
 ### Vapi Calls Failing
+
 - ✅ Check `VAPI_API_KEY` is set in Render
 - ✅ Check `VAPI_ASSISTANT_ID` is set in Render
 - ✅ Verify assistant ID matches in Vapi dashboard
@@ -125,8 +138,8 @@ Should return: `{"callId":"...","transportUrl":"...","listenUrl":"..."}`
 ## Support
 
 If you encounter issues:
+
 1. Check Render logs: **Render Dashboard → Your Service → Logs**
 2. Check browser console for frontend errors
 3. Check Vapi dashboard for call status
 4. Verify all URLs match your actual Render deployment
-

@@ -91,7 +91,7 @@ class VapiCallManager {
     try {
       console.log("[Vapi] Creating call...", {
         apiBaseUrl: API_BASE_URL,
-        assistantId,
+        assistantId: assistantId || "(will use server default)",
         userId,
         conversationId,
         fullUrl: `${API_BASE_URL}/api/vapi/create-call`,
@@ -100,7 +100,7 @@ class VapiCallManager {
       const response = await axios.post(
         `${API_BASE_URL}/api/vapi/create-call`,
         {
-          assistantId,
+          ...(assistantId && { assistantId }), // Only include if provided
           userId,
           conversationId,
         },

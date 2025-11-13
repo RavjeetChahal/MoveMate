@@ -241,14 +241,10 @@ const ChatScreen = ({ navigation }) => {
         vapiCallRef.current = null;
       });
 
-      // Get assistant ID from environment or use default
-      const assistantId = process.env.EXPO_PUBLIC_VAPI_ASSISTANT_ID || "";
+      // Get assistant ID from environment (optional - server will use VAPI_ASSISTANT_ID if not provided)
+      const assistantId = process.env.EXPO_PUBLIC_VAPI_ASSISTANT_ID || undefined;
 
-      if (!assistantId) {
-        throw new Error("VAPI_ASSISTANT_ID not configured");
-      }
-
-      // Create call
+      // Create call (pass undefined if not set - server will use VAPI_ASSISTANT_ID from env)
       const callData = await vapiCallManager.createCall(
         assistantId,
         user?.uid,

@@ -1,7 +1,13 @@
 FROM node:20-alpine
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
+
+# Copy package files first
+COPY package.json package-lock.json* ./
+
+# Install dependencies (including expo-linear-gradient)
+RUN npm ci --only=production=false
+
+# Copy all files
 COPY . .
 
 # Clear Expo cache and build the web app fresh
