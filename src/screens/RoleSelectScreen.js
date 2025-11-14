@@ -30,18 +30,19 @@ const roleOptions = [
 
 const RoleSelectScreen = ({ navigation }) => {
   const { setRole } = useAuth();
-  const { selectedVoice } = useVoice();
+  const { clearVoice } = useVoice();
   // Removed auto-redirect logic - LoginScreen handles post-login navigation
 
-  const handleSelect = (roleKey) => {
+  const handleSelect = async (roleKey) => {
     console.log(`[RoleSelect] Role selected: ${roleKey}`);
     setRole(roleKey);
     if (roleKey === "resident") {
-      if (selectedVoice) {
-        navigation.navigate("Login");
-      } else {
-        navigation.navigate("VoiceSelect");
+      try {
+        await clearVoice();
+      } catch (error) {
+        console.warn("[RoleSelect] Failed to clear previous voice", error);
       }
+      navigation.navigate("VoiceSelect");
     } else {
       navigation.navigate("Login");
     }
