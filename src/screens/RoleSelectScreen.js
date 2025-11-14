@@ -1,14 +1,9 @@
 import React from "react";
-import {
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-} from "react-native";
+import { SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { RoleCard } from "../components/RoleCard";
 import { colors, gradients } from "../theme/colors";
+import { useVoice } from "../context/VoiceContext";
 import { useAuth } from "../context/AuthContext";
 
 const roleOptions = [
@@ -35,12 +30,21 @@ const roleOptions = [
 
 const RoleSelectScreen = ({ navigation }) => {
   const { setRole } = useAuth();
+  const { selectedVoice } = useVoice();
   // Removed auto-redirect logic - LoginScreen handles post-login navigation
 
   const handleSelect = (roleKey) => {
     console.log(`[RoleSelect] Role selected: ${roleKey}`);
     setRole(roleKey);
-    navigation.navigate("Login");
+    if (roleKey === "resident") {
+      if (selectedVoice) {
+        navigation.navigate("Login");
+      } else {
+        navigation.navigate("VoiceSelect");
+      }
+    } else {
+      navigation.navigate("Login");
+    }
   };
 
   return (

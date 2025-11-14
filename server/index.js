@@ -605,6 +605,61 @@ app.post("/api/processInput", (req, res) => {
   });
 });
 
+app.get("/api/voice-preview/:voiceId", async (req, res) => {
+  const { voiceId } = req.params;
+  if (!voiceId) {
+    res.status(400).json({ error: "Voice ID is required" });
+    return;
+  }
+  if (!process.env.ELEVENLABS_API_KEY) {
+    res.status(500).json({ error: "ELEVENLABS_API_KEY is not configured" });
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
+      {
+        method: "POST",
+        headers: {
+          accept: "audio/mpeg",
+          "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: "Hi, I'm Resi. How may I help you today?",
+          model_id: process.env.ELEVENLABS_MODEL_ID || "eleven_monolingual_v1",
+          voice_settings: {
+            stability: 0.4,
+            similarity_boost: 0.7,
+            style: 0.2,
+            use_speaker_boost: true,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("[server] ElevenLabs preview failed", {
+        status: response.status,
+        body: errText,
+      });
+      res
+        .status(response.status)
+        .json({ error: "Failed to generate voice preview" });
+      return;
+    }
+
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "no-store");
+    response.body.pipe(res);
+  } catch (error) {
+    console.error("[server] voice-preview error", error);
+    res.status(500).json({ error: "Voice preview request failed" });
+  }
+});
+
 // Vapi webhook endpoint
 app.use("/api", vapiWebhook);
 

@@ -229,3 +229,6 @@ export const pingServer = async (timeout = 3000) => {
     throw error;
   }
 };
+
+export const getVoicePreviewUrl = (voiceId) =>
+  `${API_BASE_URL}/api/voice-preview/${encodeURIComponent(voiceId)}`;
